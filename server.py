@@ -206,6 +206,43 @@ def last_minute_travel() -> str:
 **Result:** I'll find the fastest and/or cheapest options available now with booking links."""
 
 
+@mcp.prompt()
+def business_trip() -> str:
+    """Optimized flight search for business travel with focus on convenience and flexibility."""
+    return """I'll help you find the best business travel flights prioritizing convenience and flexibility.
+
+**Business Travel Search Strategy:**
+1. Use `search_airports` to identify all nearby airports for maximum flexibility
+2. Focus on flight times that maximize productivity:
+   - Early morning departures (6-8 AM) to arrive for business hours
+   - Evening returns (6-9 PM) to maximize on-site time
+   - Avoid red-eyes unless specifically requested
+3. Prioritize direct flights using `get_flights_on_date` or `get_round_trip_flights`
+   - Set `return_cheapest_only=false` to see multiple options by time
+4. If dates are flexible, use `find_all_flights_in_range` with short windows (2-3 days)
+5. For premium cabins, search with `seat_type="business"` or `seat_type="first"`
+6. Compare nearby airports for better schedules, not just price
+7. Generate booking link with `generate_google_flights_url`
+
+**Business Travel Priorities:**
+- Schedule convenience over price (within reason)
+- Direct flights preferred (less delay risk)
+- Departure times that allow morning meetings
+- Return times that don't waste a full business day
+- Premium cabins for international or long flights (4+ hours)
+- Refundable/flexible fares (mention this in results)
+
+**What I need from you:**
+- Origin city (I'll check all nearby airports)
+- Destination city
+- Meeting/event dates or flexibility window
+- Preferred departure time windows
+- Seat class preference (economy/business/first)
+- Trip purpose (helps prioritize schedule vs cost)
+
+**Result:** I'll present 3-5 best options ranked by schedule convenience, with direct flights first, plus booking links."""
+
+
 # --- MCP Tool: Date Calculator ---
 
 @mcp.tool()

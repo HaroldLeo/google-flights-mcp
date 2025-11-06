@@ -26,7 +26,7 @@ Transform how you search for flights with AI assistance. This MCP server integra
 - Get flexible date price grids
 - Filter by passengers, cabin class, and preferences
 
-Built on the powerful `fast-flights` library, this server provides 9 specialized tools, 2 resource endpoints, and 3 smart prompts for comprehensive travel planning.
+Built on the powerful `fast-flights` library, this server provides 9 specialized tools, 2 resource endpoints, and 4 smart prompts for comprehensive travel planning.
 
 ---
 
@@ -75,6 +75,7 @@ Built on the powerful `fast-flights` library, this server provides 9 specialized
 - **`find_best_deal`** - Comprehensive search strategy to find the absolute cheapest flights
 - **`weekend_getaway`** - Find the best weekend getaway flights (Fri-Sun or Sat-Mon patterns)
 - **`last_minute_travel`** - Optimized search for urgent travel needs within the next 2 weeks
+- **`business_trip`** - Business travel focused on schedule convenience and direct flights
 
 ### Key Capabilities
 
@@ -170,20 +171,20 @@ After restarting your MCP client, verify the server is connected:
 ### Example 1: Simple Round Trip
 
 ```
-You: "Find me round-trip flights from New York to London, leaving July 15 and returning July 25, 2025. I need 2 adults in economy."
+You: "Find me round-trip flights from New York to London, leaving July 15 and returning July 25, 2026. I need 2 adults in economy."
 ```
 
 The AI will use `get_round_trip_flights` with:
 - Origin: JFK (or search airports if unclear)
 - Destination: LHR
-- Dates: 2025-07-15 to 2025-07-25
+- Dates: 2026-07-15 to 2026-07-25
 - Passengers: 2 adults
 - Seat class: economy
 
 ### Example 2: Flexible Date Search
 
 ```
-You: "I want to visit Tokyo for about a week sometime in March 2025. What are the cheapest dates?"
+You: "I want to visit Tokyo for about a week sometime in March 2026. What are the cheapest dates?"
 ```
 
 The AI will use `find_all_flights_in_range` to search the entire month with 6-8 day stays.
@@ -191,7 +192,7 @@ The AI will use `find_all_flights_in_range` to search the entire month with 6-8 
 ### Example 3: Multi-City Trip
 
 ```
-You: "Plan a trip: San Francisco -> Paris (3 days) -> Rome (4 days) -> back to SF. Starting June 1, 2025."
+You: "Plan a trip: San Francisco -> Paris (3 days) -> Rome (4 days) -> back to SF. Starting June 1, 2026."
 ```
 
 The AI will use `get_multi_city_flights` with calculated dates for each segment.
@@ -199,7 +200,7 @@ The AI will use `get_multi_city_flights` with calculated dates for each segment.
 ### Example 4: Airport Comparison
 
 ```
-You: "Compare flight prices from all NYC airports to Miami on December 20, 2025."
+You: "Compare flight prices from all NYC airports to Miami on December 20, 2026."
 ```
 
 The AI will use `compare_nearby_airports` with JFK, LGA, and EWR.
@@ -207,7 +208,7 @@ The AI will use `compare_nearby_airports` with JFK, LGA, and EWR.
 ### Example 5: Flexible Date Grid
 
 ```
-You: "Show me a price calendar for Los Angeles to Honolulu in April 2025."
+You: "Show me a price calendar for Los Angeles to Honolulu in April 2026."
 ```
 
 The AI will use `get_flexible_dates_grid` to show prices across different date combinations.
@@ -286,9 +287,9 @@ Search complex multi-city itineraries.
 - `flight_segments` (JSON array, required): Array of flight segments
   ```json
   [
-    {"origin": "SFO", "destination": "CDG", "date": "2025-06-01"},
-    {"origin": "CDG", "destination": "FCO", "date": "2025-06-05"},
-    {"origin": "FCO", "destination": "SFO", "date": "2025-06-10"}
+    {"origin": "SFO", "destination": "CDG", "date": "2026-06-01"},
+    {"origin": "CDG", "destination": "FCO", "date": "2026-06-05"},
+    {"origin": "FCO", "destination": "SFO", "date": "2026-06-10"}
   ]
   ```
 - `adults` (integer, default: 1): Number of adults
