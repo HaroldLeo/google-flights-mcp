@@ -991,9 +991,20 @@ async def get_multi_city_flights(
 
     except json.JSONDecodeError as e:
         return json.dumps({"error": {"message": f"Invalid JSON in flight_segments: {str(e)}", "type": "JSONDecodeError"}})
+    except RuntimeError as e:
+        error_msg = str(e)
+        print(f"MCP Tool RuntimeError in get_multi_city_flights: {error_msg}", file=sys.stderr)
+        # Check if it's a "No flights found" error from fast-flights
+        if "No flights found" in error_msg:
+            return json.dumps({
+                "message": "Google Flights returned no results for this multi-city route. The route may not be available or the dates may be invalid.",
+                "search_parameters": {"segments": segments, "adults": adults, "seat_type": seat_type},
+                "note": "Multi-city searches can be more restrictive than one-way or round-trip searches. Try breaking this into separate one-way flights or adjusting your dates."
+            })
+        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
         print(f"MCP Tool Error in get_multi_city_flights: {e}", file=sys.stderr)
-        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+        return json.dumps({"error": {"message": str(e), "type": type(e).__name__}})
 
 
 @mcp.tool()
