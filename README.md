@@ -547,6 +547,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Built with the [Model Context Protocol](https://modelcontextprotocol.io) by Anthropic
 - Flight data powered by [fast-flights](https://github.com/AWeirdDev/flights) library
 - Inspired by the need for better AI-assisted travel planning
+- Special thanks to these projects that helped shape this implementation:
+  - [opspawn/Google-Flights-MCP-Server](https://github.com/opspawn/Google-Flights-MCP-Server)
+  - [salamentic/google-flights-mcp](https://github.com/salamentic/google-flights-mcp)
 
 ---
 
