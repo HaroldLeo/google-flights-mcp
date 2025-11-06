@@ -121,6 +121,28 @@ Built on the powerful `fast-flights` library, this server provides 15 specialize
 
 ### Installation
 
+#### Option 1: Install from PyPI (Recommended)
+
+The easiest way to use this MCP server is via `uvx` (recommended) or `pip`:
+
+```bash
+# Using uvx (no installation needed, runs in isolated environment)
+uvx mcp-server-google-flights
+
+# Or install globally with pip
+pip install mcp-server-google-flights
+
+# Or install with pipx for isolated global installation
+pipx install mcp-server-google-flights
+```
+
+After installation, you'll need to install Playwright browsers:
+```bash
+playwright install
+```
+
+#### Option 2: Install from Source
+
 ```bash
 # Clone the repository
 git clone https://github.com/HaroldLeo/google-flights-mcp.git
@@ -130,8 +152,8 @@ cd google-flights-mcp
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install in development mode
+pip install -e .
 
 # Install Playwright browsers (required)
 playwright install
@@ -140,7 +162,11 @@ playwright install
 ### Test the Server
 
 ```bash
-python server.py
+# If installed from PyPI
+mcp-server-google-flights
+
+# If running from source
+python src/mcp_server_google_flights/server.py
 ```
 
 The server uses STDIO transport and will wait for MCP client connections.
@@ -153,12 +179,27 @@ The server uses STDIO transport and will wait for MCP client connections.
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
+#### If installed via PyPI (uvx/pip):
+
+```json
+{
+  "mcpServers": {
+    "google-flights": {
+      "command": "uvx",
+      "args": ["mcp-server-google-flights"]
+    }
+  }
+}
+```
+
+#### If running from source:
+
 ```json
 {
   "mcpServers": {
     "google-flights": {
       "command": "/absolute/path/to/.venv/bin/python",
-      "args": ["/absolute/path/to/google-flights-mcp/server.py"]
+      "args": ["/absolute/path/to/google-flights-mcp/src/mcp_server_google_flights/server.py"]
     }
   }
 }
@@ -168,12 +209,14 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
 Add to `.cline/cline_mcp_settings.json`:
 
+#### If installed via PyPI (uvx/pip):
+
 ```json
 {
   "mcpServers": {
     "google-flights": {
-      "command": "/absolute/path/to/.venv/bin/python",
-      "args": ["/absolute/path/to/google-flights-mcp/server.py"],
+      "command": "uvx",
+      "args": ["mcp-server-google-flights"],
       "disabled": false,
       "autoApprove": []
     }
@@ -181,7 +224,22 @@ Add to `.cline/cline_mcp_settings.json`:
 }
 ```
 
-**Important:** Use absolute paths for both the Python executable and server script.
+#### If running from source:
+
+```json
+{
+  "mcpServers": {
+    "google-flights": {
+      "command": "/absolute/path/to/.venv/bin/python",
+      "args": ["/absolute/path/to/google-flights-mcp/src/mcp_server_google_flights/server.py"],
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+**Important:** When running from source, use absolute paths for both the Python executable and server script.
 
 ### Verify Installation
 
@@ -693,6 +751,28 @@ pytest
 black .
 ruff check .
 ```
+
+### Publishing to PyPI
+
+This package is published to PyPI for easy installation. To publish a new version:
+
+```bash
+# Install build tools
+pip install build twine
+
+# Update version in pyproject.toml and src/mcp_server_google_flights/__init__.py
+
+# Build the package
+python -m build
+
+# Upload to TestPyPI (for testing)
+python -m twine upload --repository testpypi dist/*
+
+# Upload to PyPI (production)
+python -m twine upload dist/*
+```
+
+**Note:** You need PyPI credentials to publish. Contact the maintainer for access.
 
 ---
 

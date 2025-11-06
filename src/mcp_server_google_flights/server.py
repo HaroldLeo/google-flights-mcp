@@ -2064,6 +2064,10 @@ async def generate_google_flights_url(
 
 
 # --- Run the server ---
-if __name__ == "__main__":
-    # Run the server using stdio transport
+def main():
+    """Main entry point for the MCP server."""
     mcp.run(transport='stdio')
+
+
+if __name__ == "__main__":
+    main()
