@@ -26,7 +26,7 @@ Transform how you search for flights with AI assistance. This MCP server integra
 - Get flexible date price grids
 - Filter by passengers, cabin class, and preferences
 
-Built on the powerful `fast-flights` library, this server provides 9 specialized tools, 2 resource endpoints, and 4 smart prompts for comprehensive travel planning.
+Built on the powerful `fast-flights` library, this server provides 15 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
 
 ---
 
@@ -46,18 +46,34 @@ Built on the powerful `fast-flights` library, this server provides 9 specialized
 
 ## Features
 
-### Flight Search Tools (9 Total)
+### Flight Search Tools (15 Total)
 
 #### Core Search Tools
 
 | Tool | Description | Best For |
 |------|-------------|----------|
-| `get_flights_on_date` | One-way flights for a specific date | Simple one-way trips |
-| `get_round_trip_flights` | Round-trip flights with fixed dates | Standard vacation planning |
-| `find_all_flights_in_range` | Flexible date range search | Finding the best deal within a window |
+| `search_one_way_flights` | One-way flights for a specific date | Simple one-way trips |
+| `search_round_trip_flights` | Round-trip flights with fixed dates | Standard vacation planning |
+| `search_round_trips_in_date_range` | Flexible date range search | Finding the best deal within a window |
 | `get_multi_city_flights` | Multi-stop itineraries | Complex trips with multiple destinations |
 | `get_flexible_dates_grid` | Price matrix across date combinations | Visualizing price trends |
 | `compare_nearby_airports` | Multi-airport price comparison | Comparing NYC airports (JFK/LGA/EWR) |
+
+#### Specialized Search Tools
+
+| Tool | Description | Best For |
+|------|-------------|----------|
+| `search_direct_flights` | Direct flights only (no stops) | Time-sensitive travel, families with kids |
+| `search_flights_by_airline` | Filter by airline or alliance | Loyalty programs, airline preferences |
+| `search_flights_with_max_stops` | Control maximum number of stops | Balancing price and convenience |
+
+#### Filter & Analysis Tools
+
+| Tool | Description | Best For |
+|------|-------------|----------|
+| `filter_by_departure_time` | Filter by time of day | Morning/afternoon/evening/red-eye preferences |
+| `filter_by_max_duration` | Filter by total travel time | Time-sensitive travelers |
+| `compare_one_way_vs_roundtrip` | Compare pricing strategies | Finding hidden savings |
 
 #### Utility Tools
 
@@ -72,10 +88,19 @@ Built on the powerful `fast-flights` library, this server provides 9 specialized
 
 ### Smart Prompts
 
+#### General Travel
 - **`find_best_deal`** - Comprehensive search strategy to find the absolute cheapest flights
 - **`weekend_getaway`** - Find the best weekend getaway flights (Fri-Sun or Sat-Mon patterns)
 - **`last_minute_travel`** - Optimized search for urgent travel needs within the next 2 weeks
+
+#### Specialized Travel
 - **`business_trip`** - Business travel focused on schedule convenience and direct flights
+- **`family_vacation`** - Family-friendly flights with kids (direct flights, reasonable times)
+- **`budget_backpacker`** - Ultra-budget travel with maximum flexibility (red-eyes, multiple stops)
+- **`loyalty_program_optimizer`** - Maximize airline miles, points, and elite status benefits
+- **`holiday_peak_travel`** - Strategic planning for peak holiday seasons (Thanksgiving, Christmas, etc.)
+- **`long_haul_international`** - Long-haul international flights prioritizing comfort and value
+- **`stopover_explorer`** - Turn layovers into mini-adventures with strategic stopovers
 
 ### Key Capabilities
 
@@ -174,7 +199,7 @@ After restarting your MCP client, verify the server is connected:
 You: "Find me round-trip flights from New York to London, leaving July 15 and returning July 25, 2026. I need 2 adults in economy."
 ```
 
-The AI will use `get_round_trip_flights` with:
+The AI will use `search_round_trip_flights` with:
 - Origin: JFK (or search airports if unclear)
 - Destination: LHR
 - Dates: 2026-07-15 to 2026-07-25
@@ -187,7 +212,7 @@ The AI will use `get_round_trip_flights` with:
 You: "I want to visit Tokyo for about a week sometime in March 2026. What are the cheapest dates?"
 ```
 
-The AI will use `find_all_flights_in_range` to search the entire month with 6-8 day stays.
+The AI will use `search_round_trips_in_date_range` to search the entire month with 6-8 day stays.
 
 ### Example 3: Multi-City Trip
 
@@ -219,7 +244,7 @@ The AI will use `get_flexible_dates_grid` to show prices across different date c
 
 ### Flight Search Tools
 
-#### `get_flights_on_date`
+#### `search_one_way_flights`
 
 Search one-way flights for a specific date.
 
@@ -238,7 +263,7 @@ Search one-way flights for a specific date.
 
 ---
 
-#### `get_round_trip_flights`
+#### `search_round_trip_flights`
 
 Search round-trip flights with specific departure and return dates.
 
@@ -258,7 +283,7 @@ Search round-trip flights with specific departure and return dates.
 
 ---
 
-#### `find_all_flights_in_range`
+#### `search_round_trips_in_date_range`
 
 Search all possible round-trip combinations within a date range.
 
@@ -335,6 +360,141 @@ Compare prices from multiple origin airports to multiple destinations.
 - `seat_type` (string, default: "economy"): Cabin class
 
 **Returns:** Price comparison across all airport combinations.
+
+---
+
+#### `search_direct_flights`
+
+Search for direct flights only (no stops) for one-way or round-trip.
+
+**Parameters:**
+- `origin` (string, required): Departure airport code
+- `destination` (string, required): Arrival airport code
+- `date` (string, required): Departure date (YYYY-MM-DD)
+- `is_round_trip` (boolean, default: false): Search round-trip if true
+- `return_date` (string, optional): Return date (required if is_round_trip=true)
+- `adults` (integer, default: 1): Adult passengers
+- `children` (integer, default: 0): Child passengers
+- `infants_in_seat` (integer, default: 0): Infants with seat
+- `infants_on_lap` (integer, default: 0): Lap infants
+- `seat_type` (string, default: "economy"): Cabin class
+- `return_cheapest_only` (boolean, default: false): Return only cheapest option
+
+**Returns:** Direct flight options only (no connections).
+
+**Example:**
+```json
+{"origin": "SFO", "destination": "JFK", "date": "2025-07-20"}
+```
+
+---
+
+#### `search_flights_by_airline`
+
+Filter flights by specific airlines or alliances.
+
+**Parameters:**
+- `origin` (string, required): Departure airport code
+- `destination` (string, required): Arrival airport code
+- `date` (string, required): Departure date (YYYY-MM-DD)
+- `airlines` (JSON array, required): Airline codes or alliance names
+  - Airline codes: `["UA", "AA", "DL"]` (2-letter codes)
+  - Alliances: `["STAR_ALLIANCE"]`, `["SKYTEAM"]`, or `["ONEWORLD"]`
+- `is_round_trip` (boolean, default: false): Search round-trip if true
+- `return_date` (string, optional): Return date (required if is_round_trip=true)
+- `adults` (integer, default: 1): Number of adults
+- `seat_type` (string, default: "economy"): Cabin class
+- `return_cheapest_only` (boolean, default: false): Return only cheapest option
+
+**Returns:** Flights filtered by specified airlines/alliances.
+
+**Example:**
+```json
+{"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": "[\"UA\", \"AA\"]"}
+```
+
+---
+
+#### `search_flights_with_max_stops`
+
+Search flights with a maximum number of stops.
+
+**Parameters:**
+- `origin` (string, required): Departure airport code
+- `destination` (string, required): Arrival airport code
+- `date` (string, required): Departure date (YYYY-MM-DD)
+- `max_stops` (integer, required): Maximum number of stops (0, 1, or 2)
+- `is_round_trip` (boolean, default: false): Search round-trip if true
+- `return_date` (string, optional): Return date (required if is_round_trip=true)
+- `adults` (integer, default: 1): Number of adults
+- `seat_type` (string, default: "economy"): Cabin class
+- `return_cheapest_only` (boolean, default: false): Return only cheapest option
+
+**Returns:** Flights with at most the specified number of stops.
+
+**Example:**
+```json
+{"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "max_stops": 1}
+```
+
+---
+
+#### `filter_by_departure_time`
+
+Filter existing flight results by departure time of day.
+
+**Parameters:**
+- `flights_json` (string, required): JSON string of flight results from another search
+- `time_of_day` (string, required): Time preference
+  - `"morning"` (6am-12pm)
+  - `"afternoon"` (12pm-6pm)
+  - `"evening"` (6pm-12am)
+  - `"red-eye"` (12am-6am)
+
+**Returns:** Filtered flights matching the time preference.
+
+**Example:**
+```json
+{"flights_json": "[{...}]", "time_of_day": "morning"}
+```
+
+---
+
+#### `filter_by_max_duration`
+
+Filter existing flight results by maximum travel duration.
+
+**Parameters:**
+- `flights_json` (string, required): JSON string of flight results from another search
+- `max_hours` (integer, required): Maximum acceptable flight duration in hours
+
+**Returns:** Flights within the duration limit.
+
+**Example:**
+```json
+{"flights_json": "[{...}]", "max_hours": 8}
+```
+
+---
+
+#### `compare_one_way_vs_roundtrip`
+
+Compare pricing for round-trip ticket vs two one-way tickets.
+
+**Parameters:**
+- `origin` (string, required): Departure airport code
+- `destination` (string, required): Arrival airport code
+- `departure_date` (string, required): Outbound date (YYYY-MM-DD)
+- `return_date` (string, required): Return date (YYYY-MM-DD)
+- `adults` (integer, default: 1): Number of adults
+- `seat_type` (string, default: "economy"): Cabin class
+
+**Returns:** Price comparison with recommendation and potential savings.
+
+**Example:**
+```json
+{"origin": "SFO", "destination": "JFK", "departure_date": "2025-07-20", "return_date": "2025-07-27"}
+```
 
 ---
 
@@ -448,7 +608,7 @@ playwright install --with-deps
 **Problem:** Searches take a long time.
 
 **Explanation:** The server scrapes Google Flights in real-time, which can be slow, especially for:
-- `find_all_flights_in_range` with large date ranges
+- `search_round_trips_in_date_range` with large date ranges
 - `get_flexible_dates_grid` with full months
 - `compare_nearby_airports` with many airports
 
@@ -547,6 +707,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Built with the [Model Context Protocol](https://modelcontextprotocol.io) by Anthropic
 - Flight data powered by [fast-flights](https://github.com/AWeirdDev/flights) library
 - Inspired by the need for better AI-assisted travel planning
+- Special thanks to these projects that helped shape this implementation:
+  - [opspawn/Google-Flights-MCP-Server](https://github.com/opspawn/Google-Flights-MCP-Server)
+  - [salamentic/google-flights-mcp](https://github.com/salamentic/google-flights-mcp)
 
 ---
 
