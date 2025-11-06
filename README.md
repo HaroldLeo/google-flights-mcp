@@ -1,4 +1,4 @@
-# ✈️ Google Flights MCP Server
+# Google Flights MCP Server
 
 <div align="center">
 
@@ -19,12 +19,12 @@
 Transform how you search for flights with AI assistance. This MCP server integrates Google Flights data directly into your AI workflow, enabling natural language flight searches, intelligent price comparisons, and automated travel planning through Claude and other MCP-compatible clients.
 
 **What you can do:**
-- 🔍 Search flights with natural language queries
-- 💰 Compare prices across multiple airports and dates
-- 🗓️ Find the cheapest travel dates automatically
-- 🌍 Plan complex multi-city itineraries
-- 📊 Get flexible date price grids
-- 🎯 Filter by passengers, cabin class, and preferences
+- Search flights with natural language queries
+- Compare prices across multiple airports and dates
+- Find the cheapest travel dates automatically
+- Plan complex multi-city itineraries
+- Get flexible date price grids
+- Filter by passengers, cabin class, and preferences
 
 Built on the powerful `fast-flights` library, this server provides 9 specialized tools, 2 resource endpoints, and 2 smart prompts for comprehensive travel planning.
 
@@ -46,7 +46,7 @@ Built on the powerful `fast-flights` library, this server provides 9 specialized
 
 ## Features
 
-### 🛠️ Flight Search Tools (9 Total)
+### Flight Search Tools (9 Total)
 
 #### Core Search Tools
 
@@ -65,17 +65,17 @@ Built on the powerful `fast-flights` library, this server provides 9 specialized
 - **`get_travel_dates`**: Calculate travel dates relative to today
 - **`generate_google_flights_url`**: Create shareable Google Flights search links
 
-### 📚 MCP Resources
+### MCP Resources
 
 - **`airports://all`** - Browse all available airports
 - **`airports://{code}`** - Get detailed info for specific airports (e.g., `airports://LAX`)
 
-### 💡 Smart Prompts
+### Smart Prompts
 
 - **`plan_trip`** - Structured travel planning assistant
 - **`compare_destinations`** - Intelligent destination comparison
 
-### ✨ Key Capabilities
+### Key Capabilities
 
 - **Multi-passenger support**: Adults, children, lap infants, seat infants
 - **All cabin classes**: Economy, Premium Economy, Business, First
@@ -96,7 +96,7 @@ Built on the powerful `fast-flights` library, this server provides 9 specialized
 
 ```bash
 # Clone the repository
-git clone https://github.com/cantsegfault/google-flights-mcp.git
+git clone https://github.com/HaroldLeo/google-flights-mcp.git
 cd google-flights-mcp
 
 # Create virtual environment
@@ -550,16 +550,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- **Issues:** [GitHub Issues](https://github.com/cantsegfault/google-flights-mcp/issues)
+- **Issues:** [GitHub Issues](https://github.com/HaroldLeo/google-flights-mcp/issues)
 - **MCP Documentation:** [modelcontextprotocol.io](https://modelcontextprotocol.io)
-- **Discussions:** [GitHub Discussions](https://github.com/cantsegfault/google-flights-mcp/discussions)
+- **Discussions:** [GitHub Discussions](https://github.com/HaroldLeo/google-flights-mcp/discussions)
 
 ---
 
 <div align="center">
 
-**Made with ❤️ for the MCP community**
+**Made for the MCP community**
 
-⭐ Star this repo if you find it helpful!
+Star this repo if you find it helpful!
 
 </div>
