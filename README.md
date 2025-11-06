@@ -112,6 +112,56 @@ Built on the powerful `fast-flights` library, this server provides 15 specialize
 
 ---
 
+## ⚡ Performance & Reliability
+
+> **Important:** This server uses web scraping which has inherent performance and reliability limitations.
+
+### Tool Reliability Status
+
+| Status | Tool | Speed | Notes |
+|--------|------|-------|-------|
+| ✅ **Reliable** | `search_one_way_flights` | Fast (< 30s) | Most reliable tool, works consistently |
+| ✅ **Reliable** | `search_airports` | Instant | Local search, always works |
+| ✅ **Reliable** | `get_travel_dates` | Instant | Local calculation, always works |
+| ✅ **Reliable** | `generate_google_flights_url` | Instant | Generates URLs, always works |
+| ⚠️ **May Timeout** | `search_round_trip_flights` | Slow (30-60s) | May exceed MCP timeout limits |
+| ⚠️ **May Timeout** | `search_direct_flights` | Slow (30-60s) | Complex queries may timeout |
+| ⚠️ **May Timeout** | `search_flights_by_airline` | Slow (30-60s) | Filtered searches take longer |
+| ⚠️ **May Timeout** | `search_flights_with_max_stops` | Slow (30-60s) | May timeout on some routes |
+| ❌ **Often Timeouts** | `search_round_trips_in_date_range` | Very Slow (60s+) | Multiple searches, high timeout risk |
+| ❌ **Often Timeouts** | `get_flexible_dates_grid` | Very Slow (60s+) | Searches entire month grid |
+| ❌ **Often Timeouts** | `compare_nearby_airports` | Very Slow (60s+) | Searches all airport combinations |
+| ❌ **Often Timeouts** | `get_multi_city_flights` | Very Slow (60s+) | Complex itineraries often fail to scrape |
+| ❌ **Often Timeouts** | `compare_one_way_vs_roundtrip` | Very Slow (60s+) | Makes 3 separate searches |
+| ⚠️ **Depends on Input** | `filter_by_departure_time` | Fast | Works if given valid flight data |
+| ⚠️ **Depends on Input** | `filter_by_max_duration` | Fast | Works if given valid flight data |
+
+### Recommended Usage Pattern
+
+**For Best Results:**
+1. **Use `search_one_way_flights`** for reliable flight data
+2. **For round-trips:** Search two one-way flights separately instead of using `search_round_trip_flights`
+3. **For multi-city:** Use `generate_google_flights_url` to get a clickable link instead of scraping
+4. **When tools timeout:** Check the error response for `google_flights_url` field to view results in browser
+
+**Performance Tips:**
+- Use `return_cheapest_only=true` to speed up searches
+- Narrow date ranges instead of searching entire months
+- Search fewer airports at once in comparison tools
+- Consider using URL generation for complex searches
+
+### Why Scraping is Slow
+
+This server uses Playwright (headless browser) to scrape Google Flights in real-time:
+- Each search launches a browser session
+- Pages must fully load and render
+- Google may rate-limit or block excessive requests
+- MCP has built-in timeout limits (typically 60 seconds)
+
+**Alternative Approach:** For complex searches, use the URL generator tools to create Google Flights links for manual browsing.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
