@@ -52,9 +52,9 @@ Built on the powerful `fast-flights` library, this server provides 9 specialized
 
 | Tool | Description | Best For |
 |------|-------------|----------|
-| `get_flights_on_date` | One-way flights for a specific date | Simple one-way trips |
-| `get_round_trip_flights` | Round-trip flights with fixed dates | Standard vacation planning |
-| `find_all_flights_in_range` | Flexible date range search | Finding the best deal within a window |
+| `search_one_way_flights` | One-way flights for a specific date | Simple one-way trips |
+| `search_round_trip_flights` | Round-trip flights with fixed dates | Standard vacation planning |
+| `search_round_trips_in_date_range` | Flexible date range search | Finding the best deal within a window |
 | `get_multi_city_flights` | Multi-stop itineraries | Complex trips with multiple destinations |
 | `get_flexible_dates_grid` | Price matrix across date combinations | Visualizing price trends |
 | `compare_nearby_airports` | Multi-airport price comparison | Comparing NYC airports (JFK/LGA/EWR) |
@@ -174,7 +174,7 @@ After restarting your MCP client, verify the server is connected:
 You: "Find me round-trip flights from New York to London, leaving July 15 and returning July 25, 2026. I need 2 adults in economy."
 ```
 
-The AI will use `get_round_trip_flights` with:
+The AI will use `search_round_trip_flights` with:
 - Origin: JFK (or search airports if unclear)
 - Destination: LHR
 - Dates: 2026-07-15 to 2026-07-25
@@ -187,7 +187,7 @@ The AI will use `get_round_trip_flights` with:
 You: "I want to visit Tokyo for about a week sometime in March 2026. What are the cheapest dates?"
 ```
 
-The AI will use `find_all_flights_in_range` to search the entire month with 6-8 day stays.
+The AI will use `search_round_trips_in_date_range` to search the entire month with 6-8 day stays.
 
 ### Example 3: Multi-City Trip
 
@@ -219,7 +219,7 @@ The AI will use `get_flexible_dates_grid` to show prices across different date c
 
 ### Flight Search Tools
 
-#### `get_flights_on_date`
+#### `search_one_way_flights`
 
 Search one-way flights for a specific date.
 
@@ -238,7 +238,7 @@ Search one-way flights for a specific date.
 
 ---
 
-#### `get_round_trip_flights`
+#### `search_round_trip_flights`
 
 Search round-trip flights with specific departure and return dates.
 
@@ -258,7 +258,7 @@ Search round-trip flights with specific departure and return dates.
 
 ---
 
-#### `find_all_flights_in_range`
+#### `search_round_trips_in_date_range`
 
 Search all possible round-trip combinations within a date range.
 

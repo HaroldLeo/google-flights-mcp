@@ -130,7 +130,7 @@ def find_best_deal() -> str:
 
 **Search Strategy:**
 1. First, use `search_airports` to verify origin and destination airport codes
-2. Use `find_all_flights_in_range` to search all dates within your flexible window
+2. Use `search_round_trips_in_date_range` to search all dates within your flexible window
    - Set `return_cheapest_only=true` for faster results
    - Try different stay durations (e.g., 3-7 days, 7-14 days)
 3. If you have nearby airports, use `compare_nearby_airports` to check all combinations
@@ -159,7 +159,7 @@ def weekend_getaway() -> str:
 2. Search both Friday-Sunday and Saturday-Monday patterns
 3. Check multiple weekend options (next 4-8 weekends)
 4. For major metro areas, compare all nearby airports using `compare_nearby_airports`
-5. Find the cheapest weekend option with `get_round_trip_flights`
+5. Find the cheapest weekend option with `search_round_trip_flights`
 
 **Weekend Patterns to Check:**
 - Friday evening departure → Sunday evening return (2 nights)
@@ -183,7 +183,7 @@ def last_minute_travel() -> str:
 
 **Last-Minute Search Strategy:**
 1. Use `get_travel_dates` to get dates for the next 14 days
-2. Search specific dates with `get_flights_on_date` or `get_round_trip_flights`
+2. Search specific dates with `search_one_way_flights` or `search_round_trip_flights`
    - Set `return_cheapest_only=true` for quick results
 3. For better deals, check if nearby airports have availability using `compare_nearby_airports`
 4. If you have flexibility, search a 3-5 day window around your target date
@@ -217,9 +217,9 @@ def business_trip() -> str:
    - Early morning departures (6-8 AM) to arrive for business hours
    - Evening returns (6-9 PM) to maximize on-site time
    - Avoid red-eyes unless specifically requested
-3. Prioritize direct flights using `get_flights_on_date` or `get_round_trip_flights`
+3. Prioritize direct flights using `search_one_way_flights` or `search_round_trip_flights`
    - Set `return_cheapest_only=false` to see multiple options by time
-4. If dates are flexible, use `find_all_flights_in_range` with short windows (2-3 days)
+4. If dates are flexible, use `search_round_trips_in_date_range` with short windows (2-3 days)
 5. For premium cabins, search with `seat_type="business"` or `seat_type="first"`
 6. Compare nearby airports for better schedules, not just price
 7. Generate booking link with `generate_google_flights_url`
@@ -283,7 +283,7 @@ async def get_travel_dates(
 # --- MCP Tool Implementations ---
 
 @mcp.tool()
-async def get_flights_on_date(
+async def search_one_way_flights(
     origin: str,
     destination: str,
     date: str,
@@ -372,14 +372,14 @@ async def get_flights_on_date(
          error_payload = {"error": {"message": f"Invalid date format: '{date}'. Please use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
     except Exception as e:
-        print(f"MCP Tool Error in get_flights_on_date: {e}", file=sys.stderr)
+        print(f"MCP Tool Error in search_one_way_flights: {e}", file=sys.stderr)
         # Return structured error
         error_payload = {"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}}
         return json.dumps(error_payload)
 
 
 @mcp.tool()
-async def get_round_trip_flights(
+async def search_round_trip_flights(
     origin: str,
     destination: str,
     departure_date: str,
@@ -474,14 +474,14 @@ async def get_round_trip_flights(
          error_payload = {"error": {"message": f"Invalid date format provided. Use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
     except Exception as e:
-        print(f"MCP Tool Error in get_round_trip_flights: {e}", file=sys.stderr)
+        print(f"MCP Tool Error in search_round_trip_flights: {e}", file=sys.stderr)
         # Return structured error
         error_payload = {"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}}
         return json.dumps(error_payload)
 
 
-@mcp.tool(name="find_all_flights_in_range") # Renamed tool
-async def find_all_flights_in_range( # Renamed function
+@mcp.tool()
+async def search_round_trips_in_date_range(
     origin: str,
     destination: str,
     start_date_str: str,
@@ -490,7 +490,7 @@ async def find_all_flights_in_range( # Renamed function
     max_stay_days: Optional[int] = None,
     adults: int = 1,
     seat_type: str = "economy",
-    return_cheapest_only: bool = False # Added parameter
+    return_cheapest_only: bool = False
 ) -> str:
     """
     Finds available round-trip flights within a specified date range.
