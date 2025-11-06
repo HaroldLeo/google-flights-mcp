@@ -243,6 +243,272 @@ def business_trip() -> str:
 **Result:** I'll present 3-5 best options ranked by schedule convenience, with direct flights first, plus booking links."""
 
 
+@mcp.prompt()
+def family_vacation() -> str:
+    """Plan family-friendly flights with kids."""
+    return """I'll help you find the perfect family-friendly flights for your vacation!
+
+**Family Travel Search Strategy:**
+1. Use `search_airports` to find all convenient airport options for your area
+2. Prioritize `search_direct_flights` to avoid complications with connections and kids
+   - Direct flights are especially important with children to minimize travel stress
+3. Filter for reasonable departure times using `filter_by_departure_time`
+   - Avoid very early morning (before 8 AM) or late night departures
+   - Morning or afternoon flights work best with kids' schedules
+4. Use `search_round_trip_flights` or `search_round_trips_in_date_range` for family dates
+   - School breaks, holidays, and summer vacations
+5. Consider `compare_nearby_airports` if you have multiple options
+   - Sometimes a slightly farther airport has better direct flight options
+6. Account for all passengers: adults + children with proper age groups
+
+**Family-Friendly Flight Priorities:**
+- Direct flights preferred (avoids connection stress with kids)
+- Reasonable departure times (not too early or too late)
+- Adequate time for check-in and security (families need extra time)
+- Aisle seats for easy bathroom access (mention in results)
+- Consider flight duration - shorter is better with kids
+- Book early for better seat selection
+
+**What I need from you:**
+- Origin and destination cities
+- Travel dates or date flexibility (school breaks, etc.)
+- Number of adults and children (with ages if relevant)
+- Seat class preference
+- Any specific needs (infant seats, lap infants, etc.)
+
+**Result:** I'll find the most family-friendly flights with direct options prioritized, reasonable times, and booking links."""
+
+
+@mcp.prompt()
+def budget_backpacker() -> str:
+    """Ultra-budget flight search with maximum flexibility."""
+    return """I'll help you find the absolute cheapest flights for budget travel!
+
+**Budget Travel Search Strategy:**
+1. Use `search_round_trips_in_date_range` with wide date windows
+   - Set `return_cheapest_only=true` for fastest results
+   - Be flexible on dates - even a day can save significant money
+2. Use `compare_nearby_airports` to check all area airports
+   - Budget airlines often use secondary airports
+   - Includes checking all NYC (JFK/LGA/EWR) or SF Bay (SFO/OAK/SJC) options
+3. Use `search_flights_with_max_stops` with `max_stops=2`
+   - Multiple stops are acceptable for budget travel
+   - Can save 30-50% compared to direct flights
+4. Filter by `filter_by_departure_time` for "red-eye" flights
+   - Overnight flights are often cheaper
+   - Saves a night of accommodation
+5. Use `get_flexible_dates_grid` to visualize price patterns
+   - Find the cheapest travel days in the month
+6. Consider `compare_one_way_vs_roundtrip`
+   - Mix and match airlines for best prices
+
+**Budget Travel Priorities:**
+- Price is the #1 priority
+- Willing to accept multiple stops
+- Flexible on departure times (including red-eyes)
+- Flexible on dates (within a general window)
+- Will consider longer travel times
+- Secondary airports acceptable
+- Economy class only
+
+**Money-Saving Tips:**
+- Fly mid-week (Tue/Wed/Thu) instead of weekends
+- Book far in advance for international, 3-8 weeks for domestic
+- Red-eye flights save money + accommodation
+- One-way tickets sometimes cheaper than round-trip
+- Clear browser cookies before booking (avoid price increases)
+
+**What I need from you:**
+- General origin and destination (I'll check all nearby airports)
+- Approximate travel timeframe (month or season)
+- Approximate trip length or date flexibility
+- Absolute maximum budget if you have one
+
+**Result:** I'll find the rock-bottom cheapest flights, even if it means red-eyes, multiple stops, and creative routing."""
+
+
+@mcp.prompt()
+def loyalty_program_optimizer() -> str:
+    """Optimize flights for airline loyalty programs and miles."""
+    return """I'll help you find flights that maximize your airline loyalty benefits!
+
+**Loyalty Program Search Strategy:**
+1. Use `search_airports` to identify your preferred airlines' hub airports
+2. Use `search_flights_by_airline` with your preferred airlines or alliance
+   - Star Alliance: `["STAR_ALLIANCE"]` - United, Lufthansa, Air Canada, etc.
+   - SkyTeam: `["SKYTEAM"]` - Delta, Air France, KLM, etc.
+   - Oneworld: `["ONEWORLD"]` - American, British Airways, Qantas, etc.
+   - Specific airlines: `["UA", "AA", "DL"]` for United, American, Delta
+3. Compare alliance options using multiple searches if you have status with multiple programs
+4. Use `search_direct_flights` on your airline for maximum miles/points
+   - Direct flights on your airline = full mileage credit
+5. Check `search_round_trip_flights` for award availability patterns
+6. Consider `compare_nearby_airports` to find airline hub airports
+   - Example: United hub at EWR/IAD/ORD/DEN/SFO
+
+**Loyalty Program Priorities:**
+- Fly your preferred airline or alliance for miles/points
+- Earn status-qualifying miles/segments
+- Use airline lounges (priority with status)
+- Better upgrade chances on your airline
+- Alliance benefits (lounge access, priority boarding)
+- Direct flights for full mileage credit
+- Positioning flights to hubs for better availability
+
+**Elite Status Optimization:**
+- Book higher fare classes for bonus miles (Y, B, M vs. economy saver)
+- Target specific airlines for status runs
+- Connect through your airline's hubs for better upgrade chances
+- Consider paid upgrades for status-qualifying dollars
+
+**What I need from you:**
+- Origin and destination
+- Your airline loyalty programs (United Mileage Plus, AA AAdvantage, etc.)
+- Your current elite status level if any
+- Travel dates or flexibility
+- Whether you're trying to earn status or maintain it
+- Seat class preference (or using points/miles)
+
+**Result:** I'll find flights on your preferred airline/alliance, show you the best mileage-earning options, and provide strategies to maximize your loyalty benefits."""
+
+
+@mcp.prompt()
+def holiday_peak_travel() -> str:
+    """Strategic flight search for peak holiday travel periods."""
+    return """I'll help you navigate peak holiday travel and find the best options during busy seasons!
+
+**Peak Travel Search Strategy:**
+1. Use `get_travel_dates` to calculate exact holiday dates
+2. Use `search_round_trips_in_date_range` to find the best days around holidays
+   - Flying on the holiday itself is often cheaper
+   - Check +/- 3 days around peak dates
+3. Use `compare_nearby_airports` - secondary airports may have better availability
+4. Use `search_direct_flights` if available (connections get more risky during holidays)
+5. Check `get_flexible_dates_grid` for entire holiday month
+6. Book EARLY - peak travel sells out fast
+
+**Peak Holiday Periods:**
+- Thanksgiving: Wednesday before through Sunday after
+- Christmas/New Year: Dec 20-Jan 3
+- Spring Break: March-April (varies by region)
+- Summer Travel: June-August
+- Major US holidays: Memorial Day, July 4th, Labor Day
+
+**Peak Travel Strategies:**
+- **Book Early:** 2-3 months minimum for domestic, 4-6 months for international
+- **Fly on the Holiday:** Dec 25, Thanksgiving Day, Jan 1 are cheaper
+- **Red-Eyes Work:** Overnight flights on holidays have better availability
+- **Avoid Peak Days:** Don't fly Wednesday before Thanksgiving or Sunday after
+- **Secondary Airports:** More availability, fewer crowds
+- **Direct Flights:** Worth the premium during holidays (weather delays common)
+- **Travel Insurance:** Consider for expensive peak-season tickets
+
+**What I need from you:**
+- Which holiday or peak period you're traveling
+- Origin and destination
+- Your date flexibility (can you fly on the holiday itself?)
+- Number of travelers
+- Your budget tolerance (peak pricing is 2-3x normal)
+
+**Result:** I'll find the best available flights during peak season, show you the cheapest days to fly, and provide booking strategies to avoid holiday travel stress."""
+
+
+@mcp.prompt()
+def long_haul_international() -> str:
+    """Optimized search for long-haul international flights."""
+    return """I'll help you find the best long-haul international flights prioritizing comfort and value!
+
+**Long-Haul International Search Strategy:**
+1. Use `search_airports` to find all international gateway airports near you
+2. Use `search_round_trip_flights` or `search_round_trips_in_date_range` for your dates
+3. Consider `search_flights_by_airline` for your preferred airlines
+   - International carriers often have better long-haul comfort
+4. Use `search_direct_flights` for routes over 6+ hours
+   - Direct is worth the premium for very long flights
+   - Reduces jet lag and travel time
+5. Compare `seat_type="business"` or `seat_type="premium_economy"` for flights over 8 hours
+   - Lie-flat business class for ultra long-haul (10+ hours)
+6. Use `get_flexible_dates_grid` to find off-peak international pricing
+7. Consider `compare_one_way_vs_roundtrip` for open-jaw itineraries
+   - Fly into one city, out from another
+
+**Long-Haul Flight Priorities:**
+- **Comfort over price** for flights 8+ hours
+- Direct flights strongly preferred (6+ hours)
+- Premium economy or business class consideration
+- Better airlines with good service reputation
+- Convenient departure times (avoid late night arrivals)
+- Good connection times if multi-stop (2-3 hours minimum)
+- Consider lie-flat seats for overnight flights
+
+**International Travel Tips:**
+- **Gateway Airports:** Major hubs often have better direct international routes
+  - US: JFK, LAX, SFO, ORD, IAD, ATL, EWR
+  - Europe: LHR, CDG, AMS, FRA
+  - Asia: NRT, HKG, SIN, ICN
+- **Overnight Flights:** Book late evening departure, arrive morning destination time
+- **Premium Cabins:** Consider for flights 8+ hours - worth the comfort
+- **Airline Alliances:** Book through alliance partners for better pricing
+- **Book Early:** International flights - book 2-6 months ahead
+- **Shoulder Season:** Travel just before/after peak season for savings
+
+**What I need from you:**
+- Origin and destination countries/cities
+- Travel dates or approximate timeframe
+- Trip length
+- Seat class preference (economy/premium economy/business/first)
+- Number of travelers
+- Any airline preferences or alliances
+
+**Result:** I'll find the best international flights balancing price and comfort, with priority on direct flights for long-haul routes and premium cabin suggestions where appropriate."""
+
+
+@mcp.prompt()
+def stopover_explorer() -> str:
+    """Find flights with interesting layover cities for mini-adventures."""
+    return """I'll help you find flights with stopovers that turn layovers into adventures!
+
+**Stopover Explorer Search Strategy:**
+1. Use `get_multi_city_flights` to explicitly plan multi-city routes
+   - Visit 2-3 cities in one trip
+   - Example: NYC → Iceland (3 days) → London → NYC
+2. Use `search_flights_with_max_stops` with `max_stops=1` or `max_stops=2`
+   - Review layover cities in the results
+3. Look for airlines offering free stopover programs:
+   - **Iceland air:** Free Iceland stopover (KEF)
+   - **TAP Portugal:** Free Lisbon/Porto stopover (LIS/OPO)
+   - **Turkish Airlines:** Free Istanbul stopover (IST)
+   - **Emirates:** Dubai stopover program (DXB)
+   - **Singapore Airlines:** Singapore stopover (SIN)
+4. Use `compare_nearby_airports` to find the best gateway for your desired stopover
+5. Manually search specific routing if you know you want a stopover
+
+**Popular Stopover Cities:**
+- **Reykjavik, Iceland (KEF):** Perfect for EU-bound flights from US East Coast
+- **Lisbon, Portugal (LIS):** TAP allows multi-day stopovers
+- **Dubai, UAE (DXB):** Luxury stopover between Europe/US and Asia
+- **Istanbul, Turkey (IST):** Bridge between Europe and Asia
+- **Singapore (SIN):** Perfect stopover en route to Australia/Southeast Asia
+- **Tokyo, Japan (NRT/HND):** Asia-Pacific gateway
+- **Doha, Qatar (DOH):** Qatar Airways stopover program
+
+**Stopover Strategy:**
+- **Free Stopovers:** Some airlines allow extended stopovers at no extra cost
+- **Visit Times:** 2-4 days is perfect for a city stopover
+- **Hotel Packages:** Many airlines offer discounted hotel packages
+- **Visa Requirements:** Check visa needs for stopover country
+- **Luggage:** Confirm baggage policies for multi-day stopovers
+
+**What I need from you:**
+- Final origin and destination
+- Desired stopover city (or I can suggest based on route)
+- How long you want in stopover city (1-7 days)
+- Total trip timeline
+- Your interests (culture, food, nature, city life)
+
+**Result:** I'll find flights with interesting stopover opportunities, show you multi-city routing options, and help you turn a connection into a mini-vacation!"""
+
+
 # --- MCP Tool: Date Calculator ---
 
 @mcp.tool()
@@ -1031,6 +1297,683 @@ async def compare_nearby_airports(
     except Exception as e:
         print(f"MCP Tool Error in compare_nearby_airports: {e}", file=sys.stderr)
         return json.dumps({"error": {"message": f"An unexpected error occurred: {str(e)}", "type": type(e).__name__}})
+
+
+@mcp.tool()
+async def search_direct_flights(
+    origin: str,
+    destination: str,
+    date: str,
+    is_round_trip: bool = False,
+    return_date: Optional[str] = None,
+    adults: int = 1,
+    children: int = 0,
+    infants_in_seat: int = 0,
+    infants_on_lap: int = 0,
+    seat_type: str = "economy",
+    return_cheapest_only: bool = False
+) -> str:
+    """
+    Search for direct flights only (no stops). Supports both one-way and round-trip.
+
+    Args:
+        origin: Origin airport code (e.g., "SFO").
+        destination: Destination airport code (e.g., "JFK").
+        date: Departure date (YYYY-MM-DD format).
+        is_round_trip: If True, search round-trip flights (default: False).
+        return_date: Return date for round-trips (YYYY-MM-DD format, required if is_round_trip=True).
+        adults: Number of adult passengers (default: 1).
+        children: Number of children (2-11 years, default: 0).
+        infants_in_seat: Number of infants in seat (under 2 years, default: 0).
+        infants_on_lap: Number of infants on lap (under 2 years, default: 0).
+        seat_type: Fare class - economy/premium_economy/business/first (default: "economy").
+        return_cheapest_only: If True, returns only the cheapest flight (default: False).
+
+    Example Args:
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20"}
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "is_round_trip": true, "return_date": "2025-07-27"}
+    """
+    print(f"MCP Tool: Searching direct flights {origin}->{destination} for {date}...", file=sys.stderr)
+    try:
+        # Validate date format
+        datetime.datetime.strptime(date, '%Y-%m-%d')
+
+        if is_round_trip:
+            if not return_date:
+                return json.dumps({"error": {"message": "return_date is required when is_round_trip=True", "type": "ValueError"}})
+            datetime.datetime.strptime(return_date, '%Y-%m-%d')
+
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
+                FlightData(date=return_date, from_airport=destination, to_airport=origin),
+            ]
+            trip_type = "round-trip"
+        else:
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
+            ]
+            trip_type = "one-way"
+
+        passengers_info = Passengers(
+            adults=adults,
+            children=children,
+            infants_in_seat=infants_in_seat,
+            infants_on_lap=infants_on_lap
+        )
+
+        result = get_flights(
+            flight_data=flight_data,
+            trip=trip_type,
+            seat=seat_type,
+            passengers=passengers_info,
+            max_stops=0  # Direct flights only
+        )
+
+        if result and result.flights:
+            if return_cheapest_only:
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
+                processed_flights = [flight_to_dict(cheapest_flight)]
+                result_key = "cheapest_direct_flight"
+            else:
+                processed_flights = [flight_to_dict(f) for f in result.flights]
+                result_key = "direct_flights"
+
+            output_data = {
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "date": date,
+                    "is_round_trip": is_round_trip,
+                    "return_date": return_date if is_round_trip else None,
+                    "adults": adults,
+                    "children": children,
+                    "seat_type": seat_type,
+                    "max_stops": 0,
+                    "return_cheapest_only": return_cheapest_only
+                },
+                result_key: processed_flights
+            }
+            return json.dumps(output_data, indent=2)
+        else:
+            return json.dumps({
+                "message": f"No direct flights found for {origin} -> {destination} on {date}.",
+                "search_parameters": {"origin": origin, "destination": destination, "date": date, "max_stops": 0}
+            })
+
+    except ValueError as e:
+        return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except Exception as e:
+        print(f"MCP Tool Error in search_direct_flights: {e}", file=sys.stderr)
+        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+
+
+@mcp.tool()
+async def search_flights_by_airline(
+    origin: str,
+    destination: str,
+    date: str,
+    airlines: str,
+    is_round_trip: bool = False,
+    return_date: Optional[str] = None,
+    adults: int = 1,
+    seat_type: str = "economy",
+    return_cheapest_only: bool = False
+) -> str:
+    """
+    Search flights filtered by specific airlines or alliances.
+
+    Args:
+        origin: Origin airport code (e.g., "SFO").
+        destination: Destination airport code (e.g., "JFK").
+        date: Departure date (YYYY-MM-DD format).
+        airlines: JSON array of airline codes or alliance name.
+                 Airline codes: ["UA", "AA", "DL"] (2-letter codes)
+                 Alliances: ["STAR_ALLIANCE"] or ["SKYTEAM"] or ["ONEWORLD"]
+        is_round_trip: If True, search round-trip flights (default: False).
+        return_date: Return date for round-trips (YYYY-MM-DD format).
+        adults: Number of adult passengers (default: 1).
+        seat_type: Fare class (default: "economy").
+        return_cheapest_only: If True, returns only the cheapest flight (default: False).
+
+    Example Args:
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": "[\"UA\", \"AA\"]"}
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": "[\"STAR_ALLIANCE\"]"}
+    """
+    print(f"MCP Tool: Searching flights by airline {origin}->{destination}...", file=sys.stderr)
+    try:
+        # Parse airlines JSON
+        try:
+            airlines_list = json.loads(airlines)
+        except json.JSONDecodeError as e:
+            return json.dumps({"error": {"message": f"Invalid JSON in airlines: {str(e)}", "type": "JSONDecodeError"}})
+
+        if not isinstance(airlines_list, list) or not airlines_list:
+            return json.dumps({"error": {"message": "airlines must be a non-empty JSON array", "type": "ValueError"}})
+
+        # Validate dates
+        datetime.datetime.strptime(date, '%Y-%m-%d')
+
+        if is_round_trip:
+            if not return_date:
+                return json.dumps({"error": {"message": "return_date is required when is_round_trip=True", "type": "ValueError"}})
+            datetime.datetime.strptime(return_date, '%Y-%m-%d')
+
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
+                FlightData(date=return_date, from_airport=destination, to_airport=origin, airlines=airlines_list),
+            ]
+            trip_type = "round-trip"
+        else:
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
+            ]
+            trip_type = "one-way"
+
+        passengers_info = Passengers(adults=adults)
+
+        result = get_flights(
+            flight_data=flight_data,
+            trip=trip_type,
+            seat=seat_type,
+            passengers=passengers_info,
+        )
+
+        if result and result.flights:
+            if return_cheapest_only:
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
+                processed_flights = [flight_to_dict(cheapest_flight)]
+                result_key = "cheapest_flight_by_airline"
+            else:
+                processed_flights = [flight_to_dict(f) for f in result.flights]
+                result_key = "flights_by_airline"
+
+            output_data = {
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "date": date,
+                    "airlines": airlines_list,
+                    "is_round_trip": is_round_trip,
+                    "return_date": return_date if is_round_trip else None,
+                    "adults": adults,
+                    "seat_type": seat_type,
+                    "return_cheapest_only": return_cheapest_only
+                },
+                result_key: processed_flights
+            }
+            return json.dumps(output_data, indent=2)
+        else:
+            return json.dumps({
+                "message": f"No flights found for specified airlines on {date}.",
+                "search_parameters": {"origin": origin, "destination": destination, "date": date, "airlines": airlines_list}
+            })
+
+    except ValueError as e:
+        return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except Exception as e:
+        print(f"MCP Tool Error in search_flights_by_airline: {e}", file=sys.stderr)
+        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+
+
+@mcp.tool()
+async def search_flights_with_max_stops(
+    origin: str,
+    destination: str,
+    date: str,
+    max_stops: int,
+    is_round_trip: bool = False,
+    return_date: Optional[str] = None,
+    adults: int = 1,
+    seat_type: str = "economy",
+    return_cheapest_only: bool = False
+) -> str:
+    """
+    Search flights with a maximum number of stops (0=direct, 1=one stop, 2=two stops).
+
+    Args:
+        origin: Origin airport code (e.g., "SFO").
+        destination: Destination airport code (e.g., "JFK").
+        date: Departure date (YYYY-MM-DD format).
+        max_stops: Maximum number of stops (0, 1, or 2).
+        is_round_trip: If True, search round-trip flights (default: False).
+        return_date: Return date for round-trips (YYYY-MM-DD format).
+        adults: Number of adult passengers (default: 1).
+        seat_type: Fare class (default: "economy").
+        return_cheapest_only: If True, returns only the cheapest flight (default: False).
+
+    Example Args:
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "max_stops": 1}
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "max_stops": 0, "is_round_trip": true, "return_date": "2025-07-27"}
+    """
+    print(f"MCP Tool: Searching flights with max {max_stops} stops {origin}->{destination}...", file=sys.stderr)
+    try:
+        # Validate max_stops
+        if max_stops not in [0, 1, 2]:
+            return json.dumps({"error": {"message": "max_stops must be 0, 1, or 2", "type": "ValueError"}})
+
+        # Validate dates
+        datetime.datetime.strptime(date, '%Y-%m-%d')
+
+        if is_round_trip:
+            if not return_date:
+                return json.dumps({"error": {"message": "return_date is required when is_round_trip=True", "type": "ValueError"}})
+            datetime.datetime.strptime(return_date, '%Y-%m-%d')
+
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
+                FlightData(date=return_date, from_airport=destination, to_airport=origin),
+            ]
+            trip_type = "round-trip"
+        else:
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
+            ]
+            trip_type = "one-way"
+
+        passengers_info = Passengers(adults=adults)
+
+        result = get_flights(
+            flight_data=flight_data,
+            trip=trip_type,
+            seat=seat_type,
+            passengers=passengers_info,
+            max_stops=max_stops
+        )
+
+        if result and result.flights:
+            if return_cheapest_only:
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
+                processed_flights = [flight_to_dict(cheapest_flight)]
+                result_key = "cheapest_flight_with_max_stops"
+            else:
+                processed_flights = [flight_to_dict(f) for f in result.flights]
+                result_key = "flights_with_max_stops"
+
+            output_data = {
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "date": date,
+                    "max_stops": max_stops,
+                    "is_round_trip": is_round_trip,
+                    "return_date": return_date if is_round_trip else None,
+                    "adults": adults,
+                    "seat_type": seat_type,
+                    "return_cheapest_only": return_cheapest_only
+                },
+                result_key: processed_flights
+            }
+            return json.dumps(output_data, indent=2)
+        else:
+            return json.dumps({
+                "message": f"No flights found with max {max_stops} stops on {date}.",
+                "search_parameters": {"origin": origin, "destination": destination, "date": date, "max_stops": max_stops}
+            })
+
+    except ValueError as e:
+        return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except Exception as e:
+        print(f"MCP Tool Error in search_flights_with_max_stops: {e}", file=sys.stderr)
+        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+
+
+@mcp.tool()
+async def filter_by_departure_time(
+    flights_json: str,
+    time_of_day: str
+) -> str:
+    """
+    Filter flight results by departure time of day.
+    Takes existing flight search results and filters by time preference.
+
+    Args:
+        flights_json: JSON string of flight results from another search tool.
+        time_of_day: Time preference - "morning" (6am-12pm), "afternoon" (12pm-6pm),
+                     "evening" (6pm-12am), or "red-eye" (12am-6am).
+
+    Returns:
+        Filtered flight results matching the time preference.
+
+    Example Args:
+        {"flights_json": "[{...}]", "time_of_day": "morning"}
+    """
+    print(f"MCP Tool: Filtering flights by {time_of_day} departure...", file=sys.stderr)
+    try:
+        # Parse flights JSON
+        try:
+            flights_list = json.loads(flights_json)
+        except json.JSONDecodeError as e:
+            return json.dumps({"error": {"message": f"Invalid JSON in flights_json: {str(e)}", "type": "JSONDecodeError"}})
+
+        if not isinstance(flights_list, list):
+            return json.dumps({"error": {"message": "flights_json must be a JSON array", "type": "ValueError"}})
+
+        # Define time ranges
+        time_ranges = {
+            "morning": (6, 12),
+            "afternoon": (12, 18),
+            "evening": (18, 24),
+            "red-eye": (0, 6)
+        }
+
+        if time_of_day not in time_ranges:
+            return json.dumps({"error": {"message": f"time_of_day must be one of: {', '.join(time_ranges.keys())}", "type": "ValueError"}})
+
+        start_hour, end_hour = time_ranges[time_of_day]
+
+        # Filter flights by departure time
+        filtered_flights = []
+        for flight in flights_list:
+            departure_time = flight.get('departure')
+            if not departure_time:
+                continue
+
+            # Try to parse time from various formats
+            # Common formats: "6:00 AM", "06:00", "6:00 am", etc.
+            try:
+                # Remove extra spaces and convert to uppercase for AM/PM
+                time_str = departure_time.strip().upper()
+
+                # Handle AM/PM format
+                if 'AM' in time_str or 'PM' in time_str:
+                    # Parse time like "6:00 AM" or "6:00 PM"
+                    time_part = time_str.replace('AM', '').replace('PM', '').strip()
+                    hour = int(time_part.split(':')[0])
+
+                    if 'PM' in time_str and hour != 12:
+                        hour += 12
+                    elif 'AM' in time_str and hour == 12:
+                        hour = 0
+                else:
+                    # Handle 24-hour format like "18:00"
+                    hour = int(time_str.split(':')[0])
+
+                # Check if hour falls within the desired range
+                if start_hour <= hour < end_hour:
+                    filtered_flights.append(flight)
+
+            except (ValueError, IndexError):
+                # If we can't parse the time, skip this flight
+                continue
+
+        output_data = {
+            "filter_applied": {
+                "time_of_day": time_of_day,
+                "hour_range": f"{start_hour}:00 - {end_hour}:00"
+            },
+            "total_flights_checked": len(flights_list),
+            "flights_matching_time": len(filtered_flights),
+            "filtered_flights": filtered_flights
+        }
+
+        return json.dumps(output_data, indent=2)
+
+    except Exception as e:
+        print(f"MCP Tool Error in filter_by_departure_time: {e}", file=sys.stderr)
+        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+
+
+@mcp.tool()
+async def filter_by_max_duration(
+    flights_json: str,
+    max_hours: int
+) -> str:
+    """
+    Filter flight results by maximum total travel duration.
+    Takes existing flight search results and filters by duration limit.
+
+    Args:
+        flights_json: JSON string of flight results from another search tool.
+        max_hours: Maximum acceptable flight duration in hours.
+
+    Returns:
+        Filtered flight results within the duration limit.
+
+    Example Args:
+        {"flights_json": "[{...}]", "max_hours": 8}
+    """
+    print(f"MCP Tool: Filtering flights by max {max_hours}h duration...", file=sys.stderr)
+    try:
+        # Parse flights JSON
+        try:
+            flights_list = json.loads(flights_json)
+        except json.JSONDecodeError as e:
+            return json.dumps({"error": {"message": f"Invalid JSON in flights_json: {str(e)}", "type": "JSONDecodeError"}})
+
+        if not isinstance(flights_list, list):
+            return json.dumps({"error": {"message": "flights_json must be a JSON array", "type": "ValueError"}})
+
+        if max_hours <= 0:
+            return json.dumps({"error": {"message": "max_hours must be a positive number", "type": "ValueError"}})
+
+        max_minutes = max_hours * 60
+
+        # Filter flights by duration
+        filtered_flights = []
+        for flight in flights_list:
+            duration_str = flight.get('duration')
+            if not duration_str:
+                continue
+
+            try:
+                # Parse duration strings like "2h 30m", "5h", "45m", "1 hr 15 min", etc.
+                total_minutes = 0
+
+                # Remove extra spaces
+                duration_str = duration_str.lower().strip()
+
+                # Extract hours
+                if 'h' in duration_str or 'hr' in duration_str:
+                    # Split by 'h' or 'hr'
+                    if 'hr' in duration_str:
+                        hours_part = duration_str.split('hr')[0].strip()
+                    else:
+                        hours_part = duration_str.split('h')[0].strip()
+
+                    # Extract the number
+                    hours = int(''.join(filter(str.isdigit, hours_part)))
+                    total_minutes += hours * 60
+
+                # Extract minutes
+                if 'm' in duration_str or 'min' in duration_str:
+                    # Find the minutes part
+                    if 'min' in duration_str:
+                        # Handle "15 min" or "1hr 15 min"
+                        parts = duration_str.split()
+                        for i, part in enumerate(parts):
+                            if 'min' in part and i > 0:
+                                minutes = int(''.join(filter(str.isdigit, parts[i-1])))
+                                total_minutes += minutes
+                                break
+                    else:
+                        # Handle "30m" or "2h 30m"
+                        # Get text between last digit before 'm' and 'm'
+                        m_index = duration_str.rfind('m')
+                        # Find the number before 'm'
+                        num_str = ''
+                        for i in range(m_index - 1, -1, -1):
+                            if duration_str[i].isdigit():
+                                num_str = duration_str[i] + num_str
+                            elif num_str:
+                                break
+                        if num_str:
+                            minutes = int(num_str)
+                            total_minutes += minutes
+
+                # Check if within max duration
+                if total_minutes > 0 and total_minutes <= max_minutes:
+                    flight['parsed_duration_minutes'] = total_minutes
+                    filtered_flights.append(flight)
+
+            except (ValueError, IndexError):
+                # If we can't parse the duration, skip this flight
+                continue
+
+        output_data = {
+            "filter_applied": {
+                "max_hours": max_hours,
+                "max_minutes": max_minutes
+            },
+            "total_flights_checked": len(flights_list),
+            "flights_within_duration": len(filtered_flights),
+            "filtered_flights": filtered_flights
+        }
+
+        return json.dumps(output_data, indent=2)
+
+    except Exception as e:
+        print(f"MCP Tool Error in filter_by_max_duration: {e}", file=sys.stderr)
+        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+
+
+@mcp.tool()
+async def compare_one_way_vs_roundtrip(
+    origin: str,
+    destination: str,
+    departure_date: str,
+    return_date: str,
+    adults: int = 1,
+    seat_type: str = "economy"
+) -> str:
+    """
+    Compare pricing for round-trip vs two one-way tickets.
+    Sometimes booking two one-way tickets is cheaper than a round-trip.
+
+    Args:
+        origin: Origin airport code (e.g., "SFO").
+        destination: Destination airport code (e.g., "JFK").
+        departure_date: Outbound date (YYYY-MM-DD format).
+        return_date: Return date (YYYY-MM-DD format).
+        adults: Number of adult passengers (default: 1).
+        seat_type: Fare class (default: "economy").
+
+    Returns:
+        Comparison of round-trip vs two one-way prices with recommendation.
+
+    Example Args:
+        {"origin": "SFO", "destination": "JFK", "departure_date": "2025-07-20", "return_date": "2025-07-27"}
+    """
+    print(f"MCP Tool: Comparing round-trip vs one-way prices {origin}<->{destination}...", file=sys.stderr)
+    try:
+        # Validate dates
+        datetime.datetime.strptime(departure_date, '%Y-%m-%d')
+        datetime.datetime.strptime(return_date, '%Y-%m-%d')
+
+        passengers_info = Passengers(adults=adults)
+
+        # Get round-trip price
+        round_trip_data = [
+            FlightData(date=departure_date, from_airport=origin, to_airport=destination),
+            FlightData(date=return_date, from_airport=destination, to_airport=origin),
+        ]
+
+        round_trip_result = get_flights(
+            flight_data=round_trip_data,
+            trip="round-trip",
+            seat=seat_type,
+            passengers=passengers_info,
+        )
+
+        # Get outbound one-way price
+        outbound_data = [
+            FlightData(date=departure_date, from_airport=origin, to_airport=destination),
+        ]
+
+        outbound_result = get_flights(
+            flight_data=outbound_data,
+            trip="one-way",
+            seat=seat_type,
+            passengers=passengers_info,
+        )
+
+        # Get return one-way price
+        return_data = [
+            FlightData(date=return_date, from_airport=destination, to_airport=origin),
+        ]
+
+        return_result = get_flights(
+            flight_data=return_data,
+            trip="one-way",
+            seat=seat_type,
+            passengers=passengers_info,
+        )
+
+        # Find cheapest options
+        cheapest_round_trip = None
+        cheapest_round_trip_price = float('inf')
+
+        if round_trip_result and round_trip_result.flights:
+            cheapest_round_trip = min(round_trip_result.flights, key=lambda f: parse_price(f.price))
+            cheapest_round_trip_price = parse_price(cheapest_round_trip.price)
+
+        cheapest_outbound = None
+        cheapest_outbound_price = float('inf')
+
+        if outbound_result and outbound_result.flights:
+            cheapest_outbound = min(outbound_result.flights, key=lambda f: parse_price(f.price))
+            cheapest_outbound_price = parse_price(cheapest_outbound.price)
+
+        cheapest_return = None
+        cheapest_return_price = float('inf')
+
+        if return_result and return_result.flights:
+            cheapest_return = min(return_result.flights, key=lambda f: parse_price(f.price))
+            cheapest_return_price = parse_price(cheapest_return.price)
+
+        # Calculate total for two one-ways
+        two_one_ways_total = cheapest_outbound_price + cheapest_return_price
+
+        # Determine recommendation
+        if cheapest_round_trip_price == float('inf') and two_one_ways_total == float('inf'):
+            recommendation = "No flights found for this route"
+        elif cheapest_round_trip_price == float('inf'):
+            recommendation = "Book two one-way tickets (round-trip not available)"
+            savings = None
+        elif two_one_ways_total == float('inf'):
+            recommendation = "Book round-trip ticket (one-way options not available)"
+            savings = None
+        elif two_one_ways_total < cheapest_round_trip_price:
+            savings = cheapest_round_trip_price - two_one_ways_total
+            recommendation = f"Book two one-way tickets (save ${savings})"
+        elif cheapest_round_trip_price < two_one_ways_total:
+            savings = two_one_ways_total - cheapest_round_trip_price
+            recommendation = f"Book round-trip ticket (save ${savings})"
+        else:
+            savings = 0
+            recommendation = "Same price - choose based on flexibility preference"
+
+        output_data = {
+            "search_parameters": {
+                "origin": origin,
+                "destination": destination,
+                "departure_date": departure_date,
+                "return_date": return_date,
+                "adults": adults,
+                "seat_type": seat_type
+            },
+            "round_trip_option": {
+                "price": f"${cheapest_round_trip_price}" if cheapest_round_trip_price != float('inf') else "Not available",
+                "flight_details": flight_to_dict(cheapest_round_trip) if cheapest_round_trip else None
+            },
+            "two_one_way_option": {
+                "total_price": f"${two_one_ways_total}" if two_one_ways_total != float('inf') else "Not available",
+                "outbound_price": f"${cheapest_outbound_price}" if cheapest_outbound_price != float('inf') else "Not available",
+                "return_price": f"${cheapest_return_price}" if cheapest_return_price != float('inf') else "Not available",
+                "outbound_flight": flight_to_dict(cheapest_outbound) if cheapest_outbound else None,
+                "return_flight": flight_to_dict(cheapest_return) if cheapest_return else None
+            },
+            "recommendation": recommendation,
+            "potential_savings": f"${savings}" if savings else None
+        }
+
+        return json.dumps(output_data, indent=2)
+
+    except ValueError as e:
+        return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except Exception as e:
+        print(f"MCP Tool Error in compare_one_way_vs_roundtrip: {e}", file=sys.stderr)
+        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+
 
 # --- URL Generation Tool ---
 
