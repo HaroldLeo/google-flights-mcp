@@ -124,46 +124,123 @@ def get_airport_by_code(code: str) -> str:
 # --- MCP Prompts ---
 
 @mcp.prompt()
-def plan_trip() -> str:
-    """Generate a structured travel planning prompt."""
-    return """Please help me plan a trip with the following information:
+def find_best_deal() -> str:
+    """Comprehensive search strategy to find the absolute cheapest flights."""
+    return """I'll help you find the absolute best flight deal using a comprehensive search strategy.
 
-**Trip Details:**
-- Destination: [Where do you want to go?]
-- Travel Dates: [When do you want to travel?]
-- Duration: [How long will you stay?]
-- Departure City: [Where are you traveling from?]
-- Number of Travelers: [How many people?]
-- Budget: [What's your approximate budget?]
+**Search Strategy:**
+1. First, use `search_airports` to verify origin and destination airport codes
+2. Use `find_all_flights_in_range` to search all dates within your flexible window
+   - Set `return_cheapest_only=true` for faster results
+   - Try different stay durations (e.g., 3-7 days, 7-14 days)
+3. If you have nearby airports, use `compare_nearby_airports` to check all combinations
+   - Example: NYC has JFK, LGA, EWR; SF Bay has SFO, OAK, SJC
+4. Use `get_flexible_dates_grid` to visualize price patterns across entire months
+5. Compare results and identify the cheapest option
+6. Use `generate_google_flights_url` to create a direct booking link
 
-**Preferences:**
-- Seat Class: economy/premium_economy/business/first
-- Flexible Dates: [Can you travel on different dates?]
-- Nearby Airports: [Can you depart from or arrive at nearby airports?]
+**What I need from you:**
+- Origin city/airport (I'll find nearby alternatives)
+- Destination city/airport (I'll find nearby alternatives)
+- Approximate travel timeframe (e.g., "sometime in March", "late summer")
+- Flexible stay duration or specific length
+- Number of travelers and seat class preference
 
-I'll help you find the best flights and create a comprehensive travel plan!"""
+**Result:** I'll present the top 5 cheapest options with dates, prices, and booking links."""
 
 
 @mcp.prompt()
-def compare_destinations() -> str:
-    """Generate a prompt for comparing two travel destinations."""
-    return """Let's compare two travel destinations! Please provide:
+def weekend_getaway() -> str:
+    """Find the best weekend getaway flights (Fri-Sun or Sat-Mon)."""
+    return """I'll help you plan the perfect weekend getaway!
 
-**Destination 1:**
-- Airport Code: [e.g., LAX]
-- Travel Window: [Date range]
+**Search Strategy:**
+1. Calculate upcoming weekends using `get_travel_dates`
+2. Search both Friday-Sunday and Saturday-Monday patterns
+3. Check multiple weekend options (next 4-8 weekends)
+4. For major metro areas, compare all nearby airports using `compare_nearby_airports`
+5. Find the cheapest weekend option with `get_round_trip_flights`
 
-**Destination 2:**
-- Airport Code: [e.g., JFK]
-- Travel Window: [Date range]
+**Weekend Patterns to Check:**
+- Friday evening departure → Sunday evening return (2 nights)
+- Friday morning departure → Sunday night return (2 nights)
+- Saturday morning departure → Monday evening return (2 nights)
+- Thursday evening departure → Sunday night return (3 nights, extended weekend)
 
-**Common Details:**
-- Departure City: [Where are you traveling from?]
-- Trip Duration: [How many days?]
-- Budget: [Approximate budget per destination]
-- Travelers: [Number of people]
+**What I need from you:**
+- Your home city/airport
+- Destination city/airport
+- How many weekends out to search (e.g., "next 4 weekends", "March weekends")
+- Number of travelers and seat class
 
-I'll compare flight prices, find the best deals for each destination, and help you decide which offers better value!"""
+**Result:** I'll show you the cheapest weekend for your trip with exact dates and prices."""
+
+
+@mcp.prompt()
+def last_minute_travel() -> str:
+    """Optimized search for urgent travel needs within the next 2 weeks."""
+    return """I'll help you find the best last-minute flights for urgent travel!
+
+**Last-Minute Search Strategy:**
+1. Use `get_travel_dates` to get dates for the next 14 days
+2. Search specific dates with `get_flights_on_date` or `get_round_trip_flights`
+   - Set `return_cheapest_only=true` for quick results
+3. For better deals, check if nearby airports have availability using `compare_nearby_airports`
+4. If you have flexibility, search a 3-5 day window around your target date
+5. Prioritize direct flights for time-sensitive travel
+6. Generate immediate booking links with `generate_google_flights_url`
+
+**Last-Minute Tips:**
+- Weekday flights (Tue/Wed/Thu) are often cheaper than weekends
+- Early morning and late evening flights tend to be less expensive
+- Consider nearby airports even if slightly less convenient
+- Book immediately once you find a good price - they change quickly
+
+**What I need from you:**
+- Origin and destination
+- Target travel date (or date range if flexible)
+- Round-trip or one-way
+- Trip duration if round-trip
+- Number of travelers
+
+**Result:** I'll find the fastest and/or cheapest options available now with booking links."""
+
+
+@mcp.prompt()
+def business_trip() -> str:
+    """Optimized flight search for business travel with focus on convenience and flexibility."""
+    return """I'll help you find the best business travel flights prioritizing convenience and flexibility.
+
+**Business Travel Search Strategy:**
+1. Use `search_airports` to identify all nearby airports for maximum flexibility
+2. Focus on flight times that maximize productivity:
+   - Early morning departures (6-8 AM) to arrive for business hours
+   - Evening returns (6-9 PM) to maximize on-site time
+   - Avoid red-eyes unless specifically requested
+3. Prioritize direct flights using `get_flights_on_date` or `get_round_trip_flights`
+   - Set `return_cheapest_only=false` to see multiple options by time
+4. If dates are flexible, use `find_all_flights_in_range` with short windows (2-3 days)
+5. For premium cabins, search with `seat_type="business"` or `seat_type="first"`
+6. Compare nearby airports for better schedules, not just price
+7. Generate booking link with `generate_google_flights_url`
+
+**Business Travel Priorities:**
+- Schedule convenience over price (within reason)
+- Direct flights preferred (less delay risk)
+- Departure times that allow morning meetings
+- Return times that don't waste a full business day
+- Premium cabins for international or long flights (4+ hours)
+- Refundable/flexible fares (mention this in results)
+
+**What I need from you:**
+- Origin city (I'll check all nearby airports)
+- Destination city
+- Meeting/event dates or flexibility window
+- Preferred departure time windows
+- Seat class preference (economy/business/first)
+- Trip purpose (helps prioritize schedule vs cost)
+
+**Result:** I'll present 3-5 best options ranked by schedule convenience, with direct flights first, plus booking links."""
 
 
 # --- MCP Tool: Date Calculator ---

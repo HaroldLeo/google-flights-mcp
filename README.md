@@ -1,123 +1,567 @@
-# Google Flights MCP Server (Comprehensive Edition)
+# Google Flights MCP Server
 
-This comprehensive MCP server provides powerful tools, resources, and prompts to interact with Google Flights data using the `fast-flights` library.
+<div align="center">
+
+**A powerful Model Context Protocol (MCP) server for intelligent flight search and travel planning**
+
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+[Features](#features) • [Quick Start](#quick-start) • [Installation](#installation) • [Usage](#usage-examples) • [Documentation](#api-reference)
+
+</div>
+
+---
+
+## Overview
+
+Transform how you search for flights with AI assistance. This MCP server integrates Google Flights data directly into your AI workflow, enabling natural language flight searches, intelligent price comparisons, and automated travel planning through Claude and other MCP-compatible clients.
+
+**What you can do:**
+- Search flights with natural language queries
+- Compare prices across multiple airports and dates
+- Find the cheapest travel dates automatically
+- Plan complex multi-city itineraries
+- Get flexible date price grids
+- Filter by passengers, cabin class, and preferences
+
+Built on the powerful `fast-flights` library, this server provides 9 specialized tools, 2 resource endpoints, and 4 smart prompts for comprehensive travel planning.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [API Reference](#api-reference)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
 
 ## Features
 
-### MCP Tools (9 total)
+### Flight Search Tools (9 Total)
 
-#### Flight Search Tools
-*   **`get_flights_on_date`**: Fetches available one-way flights for a specific date between two airports.
-    *   Args: `origin`, `destination`, `date` (YYYY-MM-DD), `adults`, `children`, `infants_in_seat`, `infants_on_lap`, `seat_type` (economy/premium_economy/business/first), `return_cheapest_only`
-*   **`get_round_trip_flights`**: Fetches available round-trip flights for specific departure and return dates.
-    *   Args: `origin`, `destination`, `departure_date`, `return_date`, `adults`, `children`, `infants_in_seat`, `infants_on_lap`, `seat_type`, `return_cheapest_only`
-*   **`find_all_flights_in_range`**: Finds available round-trip flights within a specified date range with flexible stay duration.
-    *   Args: `origin`, `destination`, `start_date_str`, `end_date_str`, `min_stay_days`, `max_stay_days`, `adults`, `seat_type`, `return_cheapest_only`
-*   **`get_multi_city_flights`**: Fetches multi-city/multi-stop itineraries for complex trip planning.
-    *   Args: `flight_segments` (JSON array), `adults`, `seat_type`, `return_cheapest_only`
-*   **`get_flexible_dates_grid`**: Get a price grid showing cheapest round-trip flights across different date combinations.
-    *   Args: `origin`, `destination`, `departure_month` (YYYY-MM), `return_month`, `adults`, `seat_type`, `max_results`
-*   **`compare_nearby_airports`**: Compare flight prices from multiple nearby airports simultaneously.
-    *   Args: `origin_airports` (JSON array), `destination_airports` (JSON array), `date`, `adults`, `seat_type`
+#### Core Search Tools
+
+| Tool | Description | Best For |
+|------|-------------|----------|
+| `get_flights_on_date` | One-way flights for a specific date | Simple one-way trips |
+| `get_round_trip_flights` | Round-trip flights with fixed dates | Standard vacation planning |
+| `find_all_flights_in_range` | Flexible date range search | Finding the best deal within a window |
+| `get_multi_city_flights` | Multi-stop itineraries | Complex trips with multiple destinations |
+| `get_flexible_dates_grid` | Price matrix across date combinations | Visualizing price trends |
+| `compare_nearby_airports` | Multi-airport price comparison | Comparing NYC airports (JFK/LGA/EWR) |
 
 #### Utility Tools
-*   **`search_airports`**: Search for airports by name or code.
-    *   Args: `query` (airport name, city, or code)
-*   **`get_travel_dates`**: Calculate suggested travel dates based on current date.
-    *   Args: `days_from_now`, `trip_length`
-*   **`generate_google_flights_url`**: Generate a Google Flights search URL that opens in the browser.
-    *   Args: `origin`, `destination`, `departure_date`, `return_date` (optional), `adults`, `children`, `seat_type`
+
+- **`search_airports`**: Find airport codes by name or location
+- **`get_travel_dates`**: Calculate travel dates relative to today
+- **`generate_google_flights_url`**: Create shareable Google Flights search links
 
 ### MCP Resources
 
-*   **`airports://all`**: List all available airports (first 100 for readability)
-*   **`airports://{code}`**: Get information about a specific airport by its code (e.g., `airports://JFK`)
+- **`airports://all`** - Browse all available airports
+- **`airports://{code}`** - Get detailed info for specific airports (e.g., `airports://LAX`)
 
-### MCP Prompts
+### Smart Prompts
 
-*   **`plan_trip`**: Structured travel planning prompt template
-*   **`compare_destinations`**: Destination comparison prompt template
+- **`find_best_deal`** - Comprehensive search strategy to find the absolute cheapest flights
+- **`weekend_getaway`** - Find the best weekend getaway flights (Fri-Sun or Sat-Mon patterns)
+- **`last_minute_travel`** - Optimized search for urgent travel needs within the next 2 weeks
+- **`business_trip`** - Business travel focused on schedule convenience and direct flights
 
-## Setup
+### Key Capabilities
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/cantsegfault/google-flights-mcp.git
-    cd google-flights-mcp
-    ```
-2.  **Create a virtual environment (recommended):**
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
-    ```
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-4.  **Install Playwright browsers (needed by `fast_flights`):**
-    ```bash
-    playwright install
-    ```
+- **Multi-passenger support**: Adults, children, lap infants, seat infants
+- **All cabin classes**: Economy, Premium Economy, Business, First
+- **Flexible filtering**: Return only cheapest flights or see all options
+- **Date intelligence**: Search by date ranges, relative dates, or flexible months
+- **Error handling**: Robust error recovery and helpful feedback
 
-## Running the Server
+---
 
-You can run the server directly using Python:
+## Quick Start
+
+### Prerequisites
+
+- Python 3.10 or higher
+- An MCP-compatible client (Claude Desktop, Cline, etc.)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/HaroldLeo/google-flights-mcp.git
+cd google-flights-mcp
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install Playwright browsers (required)
+playwright install
+```
+
+### Test the Server
 
 ```bash
 python server.py
 ```
 
-The server uses STDIO transport by default.
+The server uses STDIO transport and will wait for MCP client connections.
 
-## Integrating with MCP Clients (e.g., Cline, Claude Desktop)
+---
 
-Add the server to your MCP client's configuration file. Example for `cline_mcp_settings.json` or `claude_desktop_config.json`:
+## Configuration
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
   "mcpServers": {
     "google-flights": {
-      "command": "/path/to/your/.venv/bin/python", // Use absolute path to venv python
-      "args": [
-        "/absolute/path/to/flight_mcp_server/server.py" // Use absolute path to server script
-      ],
-      "env": {},
-      "disabled": false,
-      "autoApprove": []
+      "command": "/absolute/path/to/.venv/bin/python",
+      "args": ["/absolute/path/to/google-flights-mcp/server.py"]
     }
-    // ... other servers
   }
 }
 ```
 
-**Important:** Replace the paths in `command` and `args` with the absolute paths to your virtual environment's Python executable and the `server.py` script on your system.
+### Cline (VSCode Extension)
 
-## Key Features
+Add to `.cline/cline_mcp_settings.json`:
 
-### Passenger Support
-All flight search tools support:
-- **Adults**: Passengers 12+ years old
-- **Children**: Ages 2-11 years
-- **Infants in Seat**: Under 2 years, with their own seat
-- **Infants on Lap**: Under 2 years, seated on adult's lap
+```json
+{
+  "mcpServers": {
+    "google-flights": {
+      "command": "/absolute/path/to/.venv/bin/python",
+      "args": ["/absolute/path/to/google-flights-mcp/server.py"],
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
 
-### Seat Classes
-Choose from multiple cabin classes:
-- `economy` - Standard economy class (default)
-- `premium_economy` - Premium economy with extra legroom
-- `business` - Business class
-- `first` - First class
+**Important:** Use absolute paths for both the Python executable and server script.
 
-### Flexible Search Options
-- **Price optimization**: Use `return_cheapest_only=true` to get only the best deal
-- **Date flexibility**: Search entire months or date ranges
-- **Multi-airport comparison**: Compare prices across nearby airports
-- **Multi-city routing**: Plan complex itineraries with multiple stops
+### Verify Installation
 
-## Notes
+After restarting your MCP client, verify the server is connected:
+- **Claude Desktop**: Look for "google-flights" in the MCP servers list
+- **Cline**: Check the MCP status indicator
 
-*   This server uses the `fast-flights` library (originally from [https://github.com/AWeirdDev/flights](https://github.com/AWeirdDev/flights)) installed via pip for its core flight scraping functionality.
-*   Flight scraping can sometimes be unreliable or slow depending on Google Flights changes and network conditions. The tools include comprehensive error handling.
-*   The `find_all_flights_in_range` and `get_flexible_dates_grid` tools can be resource-intensive as they check many date combinations.
-*   All dates should be in `YYYY-MM-DD` format (e.g., `2025-07-20`).
-*   Month parameters should be in `YYYY-MM` format (e.g., `2025-07`).
+---
+
+## Usage Examples
+
+### Example 1: Simple Round Trip
+
+```
+You: "Find me round-trip flights from New York to London, leaving July 15 and returning July 25, 2026. I need 2 adults in economy."
+```
+
+The AI will use `get_round_trip_flights` with:
+- Origin: JFK (or search airports if unclear)
+- Destination: LHR
+- Dates: 2026-07-15 to 2026-07-25
+- Passengers: 2 adults
+- Seat class: economy
+
+### Example 2: Flexible Date Search
+
+```
+You: "I want to visit Tokyo for about a week sometime in March 2026. What are the cheapest dates?"
+```
+
+The AI will use `find_all_flights_in_range` to search the entire month with 6-8 day stays.
+
+### Example 3: Multi-City Trip
+
+```
+You: "Plan a trip: San Francisco -> Paris (3 days) -> Rome (4 days) -> back to SF. Starting June 1, 2026."
+```
+
+The AI will use `get_multi_city_flights` with calculated dates for each segment.
+
+### Example 4: Airport Comparison
+
+```
+You: "Compare flight prices from all NYC airports to Miami on December 20, 2026."
+```
+
+The AI will use `compare_nearby_airports` with JFK, LGA, and EWR.
+
+### Example 5: Flexible Date Grid
+
+```
+You: "Show me a price calendar for Los Angeles to Honolulu in April 2026."
+```
+
+The AI will use `get_flexible_dates_grid` to show prices across different date combinations.
+
+---
+
+## API Reference
+
+### Flight Search Tools
+
+#### `get_flights_on_date`
+
+Search one-way flights for a specific date.
+
+**Parameters:**
+- `origin` (string, required): Departure airport code (e.g., "JFK")
+- `destination` (string, required): Arrival airport code (e.g., "LAX")
+- `date` (string, required): Travel date in YYYY-MM-DD format
+- `adults` (integer, default: 1): Number of adult passengers (12+ years)
+- `children` (integer, default: 0): Number of children (2-11 years)
+- `infants_in_seat` (integer, default: 0): Infants with own seat (<2 years)
+- `infants_on_lap` (integer, default: 0): Lap infants (<2 years)
+- `seat_type` (string, default: "economy"): Cabin class (`economy`, `premium_economy`, `business`, `first`)
+- `return_cheapest_only` (boolean, default: false): Return only the cheapest flight
+
+**Returns:** List of flight options with prices, times, airlines, and durations.
+
+---
+
+#### `get_round_trip_flights`
+
+Search round-trip flights with specific departure and return dates.
+
+**Parameters:**
+- `origin` (string, required): Departure airport code
+- `destination` (string, required): Arrival airport code
+- `departure_date` (string, required): Outbound date (YYYY-MM-DD)
+- `return_date` (string, required): Return date (YYYY-MM-DD)
+- `adults` (integer, default: 1): Adult passengers
+- `children` (integer, default: 0): Child passengers
+- `infants_in_seat` (integer, default: 0): Infants with seat
+- `infants_on_lap` (integer, default: 0): Lap infants
+- `seat_type` (string, default: "economy"): Cabin class
+- `return_cheapest_only` (boolean, default: false): Return only cheapest option
+
+**Returns:** Round-trip flight combinations with total prices.
+
+---
+
+#### `find_all_flights_in_range`
+
+Search all possible round-trip combinations within a date range.
+
+**Parameters:**
+- `origin` (string, required): Departure airport code
+- `destination` (string, required): Arrival airport code
+- `start_date_str` (string, required): Range start date (YYYY-MM-DD)
+- `end_date_str` (string, required): Range end date (YYYY-MM-DD)
+- `min_stay_days` (integer, default: 3): Minimum trip length
+- `max_stay_days` (integer, default: 7): Maximum trip length
+- `adults` (integer, default: 1): Number of adults
+- `seat_type` (string, default: "economy"): Cabin class
+- `return_cheapest_only` (boolean, default: true): Return only cheapest per combination
+
+**Returns:** All valid round-trip combinations sorted by price.
+
+**Note:** Can be resource-intensive for large date ranges.
+
+---
+
+#### `get_multi_city_flights`
+
+Search complex multi-city itineraries.
+
+**Parameters:**
+- `flight_segments` (JSON array, required): Array of flight segments
+  ```json
+  [
+    {"origin": "SFO", "destination": "CDG", "date": "2026-06-01"},
+    {"origin": "CDG", "destination": "FCO", "date": "2026-06-05"},
+    {"origin": "FCO", "destination": "SFO", "date": "2026-06-10"}
+  ]
+  ```
+- `adults` (integer, default: 1): Number of adults
+- `seat_type` (string, default: "economy"): Cabin class
+- `return_cheapest_only` (boolean, default: false): Return only cheapest option
+
+**Returns:** Multi-city itinerary options with total prices.
+
+---
+
+#### `get_flexible_dates_grid`
+
+Get a price grid showing flight costs across different date combinations.
+
+**Parameters:**
+- `origin` (string, required): Departure airport code
+- `destination` (string, required): Arrival airport code
+- `departure_month` (string, required): Outbound month (YYYY-MM)
+- `return_month` (string, required): Return month (YYYY-MM)
+- `adults` (integer, default: 1): Number of adults
+- `seat_type` (string, default: "economy"): Cabin class
+- `max_results` (integer, default: 50): Maximum results to return
+
+**Returns:** Grid of prices for different date combinations.
+
+---
+
+#### `compare_nearby_airports`
+
+Compare prices from multiple origin airports to multiple destinations.
+
+**Parameters:**
+- `origin_airports` (JSON array, required): List of origin airport codes
+  ```json
+  ["JFK", "LGA", "EWR"]
+  ```
+- `destination_airports` (JSON array, required): List of destination codes
+  ```json
+  ["LAX", "SFO"]
+  ```
+- `date` (string, required): Travel date (YYYY-MM-DD)
+- `adults` (integer, default: 1): Number of adults
+- `seat_type` (string, default: "economy"): Cabin class
+
+**Returns:** Price comparison across all airport combinations.
+
+---
+
+### Utility Tools
+
+#### `search_airports`
+
+Search for airports by name, city, or code.
+
+**Parameters:**
+- `query` (string, required): Search term (e.g., "Los Angeles", "LAX", "London")
+
+**Returns:** List of matching airports with codes and names.
+
+---
+
+#### `get_travel_dates`
+
+Calculate travel dates relative to today.
+
+**Parameters:**
+- `days_from_now` (integer, default: 30): Days until departure
+- `trip_length` (integer, default: 7): Duration of trip
+
+**Returns:** Suggested departure and return dates.
+
+---
+
+#### `generate_google_flights_url`
+
+Create a Google Flights search URL.
+
+**Parameters:**
+- `origin` (string, required): Departure airport code
+- `destination` (string, required): Arrival airport code
+- `departure_date` (string, required): Departure date (YYYY-MM-DD)
+- `return_date` (string, optional): Return date for round-trips
+- `adults` (integer, default: 1): Number of adults
+- `children` (integer, default: 0): Number of children
+- `seat_type` (string, default: "economy"): Cabin class
+
+**Returns:** Complete Google Flights URL.
+
+---
+
+### Resources
+
+Access airport data directly:
+
+```
+airports://all          # List all airports (first 100)
+airports://JFK          # Get info for JFK airport
+airports://heathrow     # Search by name
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### Server Not Connecting
+
+**Problem:** MCP client doesn't show the google-flights server.
+
+**Solutions:**
+1. Verify absolute paths in configuration
+2. Check Python executable: `which python` (Unix) or `where python` (Windows)
+3. Restart MCP client completely
+4. Check logs in client's developer console
+
+---
+
+#### Playwright Browser Error
+
+**Problem:** Error about missing browser binaries.
+
+**Solution:**
+```bash
+# Activate venv first
+source .venv/bin/activate
+
+# Install browsers
+playwright install
+
+# If that fails, try with dependencies
+playwright install --with-deps
+```
+
+---
+
+#### Flight Search Returns No Results
+
+**Possible causes:**
+- Invalid airport codes (use `search_airports` tool first)
+- Dates in the past
+- Invalid date format (must be YYYY-MM-DD)
+- No flights available for that route/date
+- Google Flights rate limiting
+
+**Solutions:**
+1. Verify airport codes exist
+2. Check date formatting
+3. Try broader date range
+4. Wait a few minutes if rate-limited
+
+---
+
+#### Slow Search Performance
+
+**Problem:** Searches take a long time.
+
+**Explanation:** The server scrapes Google Flights in real-time, which can be slow, especially for:
+- `find_all_flights_in_range` with large date ranges
+- `get_flexible_dates_grid` with full months
+- `compare_nearby_airports` with many airports
+
+**Solutions:**
+- Use `return_cheapest_only=true` for faster results
+- Narrow date ranges
+- Search fewer airports at once
+
+---
+
+#### Import Errors
+
+**Problem:** `ModuleNotFoundError` when starting server.
+
+**Solution:**
+```bash
+# Ensure venv is activated
+source .venv/bin/activate
+
+# Reinstall dependencies
+pip install -r requirements.txt
+```
+
+---
+
+### Debug Mode
+
+For troubleshooting, run the server with Python logging:
+
+```bash
+python -u server.py 2>&1 | tee server.log
+```
+
+Check `server.log` for detailed error messages.
+
+---
+
+## Contributing
+
+Contributions are welcome! Here's how you can help:
+
+### Reporting Bugs
+
+Open an issue with:
+- Description of the problem
+- Steps to reproduce
+- Expected vs actual behavior
+- Server logs if applicable
+
+### Suggesting Features
+
+Open an issue describing:
+- The feature you'd like to see
+- Use cases and examples
+- Why it would be valuable
+
+### Pull Requests
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Test thoroughly
+5. Commit with clear messages
+6. Push to your fork
+7. Open a Pull Request
+
+### Development Setup
+
+```bash
+# Clone your fork
+git clone https://github.com/YOUR_USERNAME/google-flights-mcp.git
+cd google-flights-mcp
+
+# Install dev dependencies
+pip install -r requirements.txt
+pip install pytest black ruff
+
+# Run tests
+pytest
+
+# Format code
+black .
+ruff check .
+```
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+- Built with the [Model Context Protocol](https://modelcontextprotocol.io) by Anthropic
+- Flight data powered by [fast-flights](https://github.com/AWeirdDev/flights) library
+- Inspired by the need for better AI-assisted travel planning
+
+---
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/HaroldLeo/google-flights-mcp/issues)
+- **MCP Documentation:** [modelcontextprotocol.io](https://modelcontextprotocol.io)
+- **Discussions:** [GitHub Discussions](https://github.com/HaroldLeo/google-flights-mcp/discussions)
+
+---
+
+<div align="center">
+
+**Made for the MCP community**
+
+Star this repo if you find it helpful!
+
+</div>
