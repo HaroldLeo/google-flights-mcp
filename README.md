@@ -26,7 +26,7 @@ Transform how you search for flights with AI assistance. This MCP server integra
 - Get flexible date price grids
 - Filter by passengers, cabin class, and preferences
 
-Built on the powerful `fast-flights` library, this server provides 9 specialized tools, 2 resource endpoints, and 2 smart prompts for comprehensive travel planning.
+Built on the powerful `fast-flights` library, this server provides 9 specialized tools, 2 resource endpoints, and 3 smart prompts for comprehensive travel planning.
 
 ---
 
@@ -72,8 +72,9 @@ Built on the powerful `fast-flights` library, this server provides 9 specialized
 
 ### Smart Prompts
 
-- **`plan_trip`** - Structured travel planning assistant
-- **`compare_destinations`** - Intelligent destination comparison
+- **`find_best_deal`** - Comprehensive search strategy to find the absolute cheapest flights
+- **`weekend_getaway`** - Find the best weekend getaway flights (Fri-Sun or Sat-Mon patterns)
+- **`last_minute_travel`** - Optimized search for urgent travel needs within the next 2 weeks
 
 ### Key Capabilities
 
