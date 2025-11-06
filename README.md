@@ -448,7 +448,7 @@ playwright install --with-deps
 **Problem:** Searches take a long time.
 
 **Explanation:** The server scrapes Google Flights in real-time, which can be slow, especially for:
-- `find_all_flights_in_range` with large date ranges
+- `search_round_trips_in_date_range` with large date ranges
 - `get_flexible_dates_grid` with full months
 - `compare_nearby_airports` with many airports
 
