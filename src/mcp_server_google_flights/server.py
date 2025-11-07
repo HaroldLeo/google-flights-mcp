@@ -1483,10 +1483,13 @@ async def search_flights_by_airline(
     return_date: Optional[str] = None,
     adults: int = 1,
     seat_type: str = "economy",
+    max_stops: int = 2,
     return_cheapest_only: bool = False
 ) -> str:
     """
     Search flights filtered by specific airlines or alliances.
+
+    💡 TIP: Default max_stops=2 provides more reliable scraping for round-trip searches.
 
     Args:
         origin: Origin airport code (e.g., "SFO").
@@ -1500,12 +1503,13 @@ async def search_flights_by_airline(
         return_date: Return date for round-trips (YYYY-MM-DD format).
         adults: Number of adult passengers (default: 1).
         seat_type: Fare class (default: "economy").
+        max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
 
     Example Args:
         {"origin": "SFO", "destination": "TYO", "date": "2026-02-20", "airlines": "UA"}
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": "[\"UA\", \"AA\"]"}
-        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": "STAR_ALLIANCE"}
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": "STAR_ALLIANCE", "max_stops": 0}
     """
     print(f"MCP Tool: Searching flights by airline {origin}->{destination}...", file=sys.stderr)
     try:
@@ -1553,6 +1557,7 @@ async def search_flights_by_airline(
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
+            max_stops=max_stops
         )
 
         if result and result.flights:
@@ -1574,6 +1579,7 @@ async def search_flights_by_airline(
                     "return_date": return_date if is_round_trip else None,
                     "adults": adults,
                     "seat_type": seat_type,
+                    "max_stops": max_stops,
                     "return_cheapest_only": return_cheapest_only
                 },
                 result_key: processed_flights
@@ -1581,8 +1587,8 @@ async def search_flights_by_airline(
             return json.dumps(output_data, indent=2)
         else:
             return json.dumps({
-                "message": f"No flights found for specified airlines on {date}.",
-                "search_parameters": {"origin": origin, "destination": destination, "date": date, "airlines": airlines_list}
+                "message": f"No flights found for specified airlines on {date} with max {max_stops} stops.",
+                "search_parameters": {"origin": origin, "destination": destination, "date": date, "airlines": airlines_list, "max_stops": max_stops}
             })
 
     except ValueError as e:
@@ -1613,9 +1619,10 @@ async def search_flights_by_airline(
                     "date": date,
                     "airlines": airlines_list,
                     "is_round_trip": is_round_trip,
-                    "return_date": return_date if is_round_trip else None
+                    "return_date": return_date if is_round_trip else None,
+                    "max_stops": max_stops
                 },
-                "note": "Airline-filtered searches may not return results via scraping. Click the URL below to view flights in your browser."
+                "note": f"Airline-filtered searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser."
             }
             if google_flights_url:
                 response_data["google_flights_url"] = google_flights_url
