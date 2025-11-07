@@ -758,6 +758,18 @@ async def search_round_trips_in_date_range(
     Finds available round-trip flights within a specified date range.
     Can optionally return only the cheapest flight found for each date pair.
 
+    ⚠️ RATE LIMIT WARNING: This function makes multiple Google Flights scraping requests.
+    Each date pair combination = 1 request. The function is LIMITED to a MAXIMUM of 30
+    requests to prevent rate limiting and IP blocking.
+
+    Example request counts:
+    - 7 day range with 5-7 day stays: ~10-15 requests (Safe)
+    - 14 day range with no limits: ~105 requests (WILL BE REJECTED)
+    - 30 day range: ~465 requests (WILL BE REJECTED)
+
+    💡 TIP: Use min_stay_days and max_stay_days to reduce combinations.
+    Set return_cheapest_only=true for faster results.
+
     Args:
         origin: Origin airport code (e.g., "DEN").
         destination: Destination airport code (e.g., "LAX").
@@ -773,6 +785,8 @@ async def search_round_trips_in_date_range(
         {"origin": "JFK", "destination": "MIA", "start_date_str": "2025-09-10", "end_date_str": "2025-09-20", "min_stay_days": 5}
         {"origin": "JFK", "destination": "MIA", "start_date_str": "2025-09-10", "end_date_str": "2025-09-20", "min_stay_days": 5, "return_cheapest_only": true}
     """
+    # Rate limit protection
+    MAX_DATE_COMBINATIONS = 30
     # Adjust print message based on mode
     search_mode = "cheapest flight per pair" if return_cheapest_only else "all flights"
     print(f"MCP Tool: Finding {search_mode} {origin}<->{destination} between {start_date_str} and {end_date_str}...", file=sys.stderr)
@@ -817,6 +831,20 @@ async def search_round_trips_in_date_range(
             if valid_stay:
                 total_combinations += 1
                 date_pairs_to_check.append((depart_date, return_date))
+
+    # Enforce rate limit protection
+    if total_combinations > MAX_DATE_COMBINATIONS:
+        return json.dumps({
+            "error": {
+                "message": f"Too many date combinations ({total_combinations} requested, maximum {MAX_DATE_COMBINATIONS} allowed). "
+                          f"This would make {total_combinations} scraping requests and hit rate limits. "
+                          f"Please narrow your date range or add min_stay_days/max_stay_days filters.",
+                "type": "RateLimitError",
+                "requested_combinations": total_combinations,
+                "maximum_allowed": MAX_DATE_COMBINATIONS,
+                "suggestion": "Try: (1) Shorter date range, (2) Add min_stay_days/max_stay_days, (3) Split into multiple smaller searches"
+            }
+        })
 
     print(f"MCP Tool: Checking {total_combinations} valid date combinations in range...", file=sys.stderr)
     count = 0
@@ -1058,6 +1086,18 @@ async def compare_nearby_airports(
     Compare flight prices from multiple nearby airports simultaneously.
     Perfect for finding the best deal when you have flexibility in departure/arrival airports.
 
+    ⚠️ RATE LIMIT WARNING: This function makes multiple Google Flights scraping requests.
+    Each origin-destination combination = 1 request. LIMITED to MAXIMUM of 12 requests
+    (e.g., 3 origins × 4 destinations, or 2 origins × 6 destinations).
+
+    Example request counts:
+    - 2 origins × 2 destinations: 4 requests (Safe)
+    - 3 origins × 3 destinations: 9 requests (Safe)
+    - 4 origins × 4 destinations: 16 requests (WILL BE REJECTED)
+    - 5 origins × 5 destinations: 25 requests (WILL BE REJECTED)
+
+    💡 TIP: Limit to 2-3 airports per list for best results.
+
     Args:
         origin_airports: JSON array of origin airport codes (e.g., '["SFO", "OAK", "SJC"]').
         destination_airports: JSON array of destination airport codes (e.g., '["JFK", "EWR", "LGA"]').
@@ -1068,6 +1108,8 @@ async def compare_nearby_airports(
     Example Args:
         {"origin_airports": '["SFO", "OAK", "SJC"]', "destination_airports": '["JFK", "EWR", "LGA"]', "date": "2025-07-20"}
     """
+    # Rate limit protection
+    MAX_AIRPORT_COMBINATIONS = 12
     print(f"MCP Tool: Comparing flights across multiple airports for {date}...", file=sys.stderr)
     try:
         # Parse airport arrays
@@ -1092,6 +1134,23 @@ async def compare_nearby_airports(
         # Search all combinations
         comparisons = []
         total_combinations = len(origins) * len(destinations)
+
+        # Enforce rate limit protection
+        if total_combinations > MAX_AIRPORT_COMBINATIONS:
+            return json.dumps({
+                "error": {
+                    "message": f"Too many airport combinations ({total_combinations} requested, maximum {MAX_AIRPORT_COMBINATIONS} allowed). "
+                              f"This would make {total_combinations} scraping requests and hit rate limits. "
+                              f"Please reduce the number of airports in your lists.",
+                    "type": "RateLimitError",
+                    "requested_combinations": total_combinations,
+                    "maximum_allowed": MAX_AIRPORT_COMBINATIONS,
+                    "origins_count": len(origins),
+                    "destinations_count": len(destinations),
+                    "suggestion": "Try: (1) Limit to 2-3 airports per list, (2) Split into multiple smaller searches"
+                }
+            })
+
         count = 0
 
         for origin in origins:

@@ -634,18 +634,33 @@ playwright install --with-deps
 
 ---
 
-#### Slow Search Performance
+#### Slow Search Performance & Rate Limits
 
-**Problem:** Searches take a long time.
+**Problem:** Searches take a long time or are rejected with rate limit errors.
 
-**Explanation:** The server scrapes Google Flights in real-time, which can be slow, especially for:
-- `search_round_trips_in_date_range` with large date ranges
-- `compare_nearby_airports` with many airports
+**Explanation:** The server scrapes Google Flights in real-time. Some functions make multiple scraping requests and have hard limits to prevent rate limiting and IP blocking:
+
+**Rate-Limited Functions:**
+- `search_round_trips_in_date_range` - **Maximum 30 date combinations**
+  - Example: 7-day range with 5-7 day stays = ~10-15 requests (OK)
+  - Example: 14-day range with no filters = ~105 requests (REJECTED)
+- `compare_nearby_airports` - **Maximum 12 airport combinations**
+  - Example: 3 origins × 3 destinations = 9 requests (OK)
+  - Example: 4 origins × 4 destinations = 16 requests (REJECTED)
 
 **Solutions:**
-- Use `return_cheapest_only=true` for faster results
-- Narrow date ranges
-- Search fewer airports at once
+- **For date range searches:**
+  - Narrow date ranges (keep under 7-10 days)
+  - Use `min_stay_days` and `max_stay_days` filters
+  - Use `return_cheapest_only=true` for faster results
+  - Split large searches into multiple smaller ones
+
+- **For airport comparisons:**
+  - Limit to 2-3 airports per list
+  - Compare fewer combinations at once
+  - Make multiple smaller comparisons if needed
+
+**Why these limits exist:** Without them, searches with 100+ requests would take 30+ minutes and get your IP blocked by Google.
 
 ---
 
