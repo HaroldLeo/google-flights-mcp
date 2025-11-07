@@ -1178,28 +1178,42 @@ async def compare_nearby_airports(
     💡 TIP: Limit to 2-3 airports per list for best results.
 
     Args:
-        origin_airports: JSON array of origin airport codes (e.g., '["SFO", "OAK", "SJC"]').
-        destination_airports: JSON array of destination airport codes (e.g., '["JFK", "EWR", "LGA"]').
+        origin_airports: Origin airport code(s). Can be either:
+                        - Single airport: "SFO"
+                        - Multiple airports: ["SFO", "OAK", "SJC"] (JSON array)
+        destination_airports: Destination airport code(s). Can be either:
+                             - Single airport: "JFK"
+                             - Multiple airports: ["JFK", "EWR", "LGA"] (JSON array)
         date: The specific date to search (YYYY-MM-DD format).
         adults: Number of adult passengers (default: 1).
         seat_type: Fare class (default: "economy").
 
     Example Args:
-        {"origin_airports": '["SFO", "OAK", "SJC"]', "destination_airports": '["JFK", "EWR", "LGA"]', "date": "2025-07-20"}
+        {"origin_airports": "SFO", "destination_airports": "JFK", "date": "2025-07-20"}
+        {"origin_airports": '["SFO", "OAK"]', "destination_airports": '["JFK", "EWR"]', "date": "2025-07-20"}
     """
     # Rate limit protection
     MAX_AIRPORT_COMBINATIONS = 12
     print(f"MCP Tool: Comparing flights across multiple airports for {date}...", file=sys.stderr)
     try:
-        # Parse airport arrays
+        # Parse airport arrays - accept both plain strings or JSON arrays
+        # Parse origins
         try:
             origins = json.loads(origin_airports)
-            destinations = json.loads(destination_airports)
-        except json.JSONDecodeError as e:
-            return json.dumps({"error": {"message": f"Invalid JSON in airport lists: {str(e)}", "type": "JSONDecodeError"}})
+            if not isinstance(origins, list):
+                origins = [origins]
+        except json.JSONDecodeError:
+            # Treat as plain string
+            origins = [origin_airports]
 
-        if not isinstance(origins, list) or not isinstance(destinations, list):
-            return json.dumps({"error": {"message": "Airport parameters must be JSON arrays", "type": "ValueError"}})
+        # Parse destinations
+        try:
+            destinations = json.loads(destination_airports)
+            if not isinstance(destinations, list):
+                destinations = [destinations]
+        except json.JSONDecodeError:
+            # Treat as plain string
+            destinations = [destination_airports]
 
         if not origins or not destinations:
             return json.dumps({"error": {"message": "Airport lists cannot be empty", "type": "ValueError"}})
@@ -1478,9 +1492,10 @@ async def search_flights_by_airline(
         origin: Origin airport code (e.g., "SFO").
         destination: Destination airport code (e.g., "JFK").
         date: Departure date (YYYY-MM-DD format).
-        airlines: JSON array of airline codes or alliance name.
-                 Airline codes: ["UA", "AA", "DL"] (2-letter codes)
-                 Alliances: ["STAR_ALLIANCE"] or ["SKYTEAM"] or ["ONEWORLD"]
+        airlines: Airline code(s) or alliance name. Can be either:
+                 - Single airline: "UA" or "AA" or "DL" (2-letter codes)
+                 - Multiple airlines: ["UA", "AA", "DL"] (JSON array)
+                 - Alliance: "STAR_ALLIANCE" or "SKYTEAM" or "ONEWORLD"
         is_round_trip: If True, search round-trip flights (default: False).
         return_date: Return date for round-trips (YYYY-MM-DD format).
         adults: Number of adult passengers (default: 1).
@@ -1488,19 +1503,26 @@ async def search_flights_by_airline(
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
 
     Example Args:
+        {"origin": "SFO", "destination": "TYO", "date": "2026-02-20", "airlines": "UA"}
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": "[\"UA\", \"AA\"]"}
-        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": "[\"STAR_ALLIANCE\"]"}
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": "STAR_ALLIANCE"}
     """
     print(f"MCP Tool: Searching flights by airline {origin}->{destination}...", file=sys.stderr)
     try:
-        # Parse airlines JSON
+        # Parse airlines - accept both plain string "UA" or JSON array "[\"UA\"]"
+        airlines_list = None
         try:
+            # First try parsing as JSON array
             airlines_list = json.loads(airlines)
-        except json.JSONDecodeError as e:
-            return json.dumps({"error": {"message": f"Invalid JSON in airlines: {str(e)}", "type": "JSONDecodeError"}})
+            if not isinstance(airlines_list, list):
+                # If it parsed but isn't a list, wrap it
+                airlines_list = [airlines_list]
+        except json.JSONDecodeError:
+            # If JSON parsing fails, treat it as a plain string and wrap it in a list
+            airlines_list = [airlines]
 
-        if not isinstance(airlines_list, list) or not airlines_list:
-            return json.dumps({"error": {"message": "airlines must be a non-empty JSON array", "type": "ValueError"}})
+        if not airlines_list:
+            return json.dumps({"error": {"message": "airlines parameter cannot be empty", "type": "ValueError"}})
 
         # Validate dates
         datetime.datetime.strptime(date, '%Y-%m-%d')
