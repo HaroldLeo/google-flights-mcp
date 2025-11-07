@@ -126,9 +126,8 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 | ⚠️ **May Timeout** | `search_direct_flights` | Slow (30-60s) | Complex queries may timeout |
 | ⚠️ **May Timeout** | `search_flights_by_airline` | Slow (30-60s) | Filtered searches take longer |
 | ⚠️ **May Timeout** | `search_flights_with_max_stops` | Slow (30-60s) | May timeout on some routes |
-| ❌ **Often Timeouts** | `search_round_trips_in_date_range` | Very Slow (60s+) | Multiple searches, high timeout risk |
-| ❌ **Often Timeouts** | `get_flexible_dates_grid` | Very Slow (60s+) | Searches entire month grid |
-| ❌ **Often Timeouts** | `compare_nearby_airports` | Very Slow (60s+) | Searches all airport combinations |
+| ⚠️ **Rate Limited** | `search_round_trips_in_date_range` | Slow-Very Slow | Limited to 30 date combinations max |
+| ⚠️ **Rate Limited** | `compare_nearby_airports` | Slow | Limited to 12 airport combinations max |
 | ❌ **Often Timeouts** | `get_multi_city_flights` | Very Slow (60s+) | Complex itineraries often fail to scrape |
 | ❌ **Often Timeouts** | `compare_one_way_vs_roundtrip` | Very Slow (60s+) | Makes 3 separate searches |
 | ⚠️ **Depends on Input** | `filter_by_departure_time` | Fast | Works if given valid flight data |
