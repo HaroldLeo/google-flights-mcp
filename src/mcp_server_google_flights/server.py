@@ -1893,15 +1893,19 @@ async def filter_by_departure_time(
     Example Args:
         {"flights_json": "[{...}]", "time_of_day": "morning"}
     """
-    print(f"MCP Tool: Filtering flights by {time_of_day} departure...", file=sys.stderr)
+    TOOL = "filter_by_departure_time"
+    log_info(TOOL, f"Filtering by {time_of_day} departure times")
+
     try:
         # Parse flights JSON
         try:
             flights_list = json.loads(flights_json)
         except json.JSONDecodeError as e:
+            log_error(TOOL, "JSONDecodeError", f"Invalid flights_json: {str(e)}")
             return json.dumps({"error": {"message": f"Invalid JSON in flights_json: {str(e)}", "type": "JSONDecodeError"}})
 
         if not isinstance(flights_list, list):
+            log_error(TOOL, "ValueError", "flights_json must be a JSON array")
             return json.dumps({"error": {"message": "flights_json must be a JSON array", "type": "ValueError"}})
 
         # Define time ranges
@@ -1913,6 +1917,7 @@ async def filter_by_departure_time(
         }
 
         if time_of_day not in time_ranges:
+            log_error(TOOL, "ValueError", f"Invalid time_of_day: {time_of_day}")
             return json.dumps({"error": {"message": f"time_of_day must be one of: {', '.join(time_ranges.keys())}", "type": "ValueError"}})
 
         start_hour, end_hour = time_ranges[time_of_day]
@@ -1952,6 +1957,8 @@ async def filter_by_departure_time(
                 # If we can't parse the time, skip this flight
                 continue
 
+        log_info(TOOL, f"Filtered {len(flights_list)} flights → {len(filtered_flights)} matching {time_of_day}")
+
         output_data = {
             "filter_applied": {
                 "time_of_day": time_of_day,
@@ -1965,7 +1972,9 @@ async def filter_by_departure_time(
         return json.dumps(output_data, indent=2)
 
     except Exception as e:
-        print(f"MCP Tool Error in filter_by_departure_time: {e}", file=sys.stderr)
+        import traceback
+        log_error(TOOL, type(e).__name__, str(e))
+        log_debug(TOOL, "traceback", traceback.format_exc())
         return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
 
 
@@ -1988,18 +1997,23 @@ async def filter_by_max_duration(
     Example Args:
         {"flights_json": "[{...}]", "max_hours": 8}
     """
-    print(f"MCP Tool: Filtering flights by max {max_hours}h duration...", file=sys.stderr)
+    TOOL = "filter_by_max_duration"
+    log_info(TOOL, f"Filtering by max duration: {max_hours}h")
+
     try:
         # Parse flights JSON
         try:
             flights_list = json.loads(flights_json)
         except json.JSONDecodeError as e:
+            log_error(TOOL, "JSONDecodeError", f"Invalid flights_json: {str(e)}")
             return json.dumps({"error": {"message": f"Invalid JSON in flights_json: {str(e)}", "type": "JSONDecodeError"}})
 
         if not isinstance(flights_list, list):
+            log_error(TOOL, "ValueError", "flights_json must be a JSON array")
             return json.dumps({"error": {"message": "flights_json must be a JSON array", "type": "ValueError"}})
 
         if max_hours <= 0:
+            log_error(TOOL, "ValueError", f"max_hours must be positive, got {max_hours}")
             return json.dumps({"error": {"message": "max_hours must be a positive number", "type": "ValueError"}})
 
         max_minutes = max_hours * 60
@@ -2065,6 +2079,8 @@ async def filter_by_max_duration(
                 # If we can't parse the duration, skip this flight
                 continue
 
+        log_info(TOOL, f"Filtered {len(flights_list)} flights → {len(filtered_flights)} within {max_hours}h")
+
         output_data = {
             "filter_applied": {
                 "max_hours": max_hours,
@@ -2078,7 +2094,9 @@ async def filter_by_max_duration(
         return json.dumps(output_data, indent=2)
 
     except Exception as e:
-        print(f"MCP Tool Error in filter_by_max_duration: {e}", file=sys.stderr)
+        import traceback
+        log_error(TOOL, type(e).__name__, str(e))
+        log_debug(TOOL, "traceback", traceback.format_exc())
         return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
 
 
@@ -2109,7 +2127,10 @@ async def compare_one_way_vs_roundtrip(
     Example Args:
         {"origin": "SFO", "destination": "JFK", "departure_date": "2025-07-20", "return_date": "2025-07-27"}
     """
-    print(f"MCP Tool: Comparing round-trip vs one-way prices {origin}<->{destination}...", file=sys.stderr)
+    TOOL = "compare_one_way_vs_roundtrip"
+    log_info(TOOL, f"Comparing pricing: {origin}↔{destination} ({departure_date} to {return_date})")
+    log_debug(TOOL, "method", "round-trip vs 2× one-way")
+
     try:
         # Validate dates
         datetime.datetime.strptime(departure_date, '%Y-%m-%d')
@@ -2118,6 +2139,7 @@ async def compare_one_way_vs_roundtrip(
         passengers_info = Passengers(adults=adults)
 
         # Get round-trip price
+        log_info(TOOL, "Fetching round-trip prices...")
         round_trip_data = [
             FlightData(date=departure_date, from_airport=origin, to_airport=destination),
             FlightData(date=return_date, from_airport=destination, to_airport=origin),
@@ -2131,6 +2153,7 @@ async def compare_one_way_vs_roundtrip(
         )
 
         # Get outbound one-way price
+        log_info(TOOL, "Fetching outbound one-way prices...")
         outbound_data = [
             FlightData(date=departure_date, from_airport=origin, to_airport=destination),
         ]
@@ -2143,6 +2166,7 @@ async def compare_one_way_vs_roundtrip(
         )
 
         # Get return one-way price
+        log_info(TOOL, "Fetching return one-way prices...")
         return_data = [
             FlightData(date=return_date, from_airport=destination, to_airport=origin),
         ]
@@ -2198,6 +2222,8 @@ async def compare_one_way_vs_roundtrip(
             savings = 0
             recommendation = "Same price - choose based on flexibility preference"
 
+        log_info(TOOL, f"Comparison complete: {recommendation}")
+
         output_data = {
             "search_parameters": {
                 "origin": origin,
@@ -2225,10 +2251,11 @@ async def compare_one_way_vs_roundtrip(
         return json.dumps(output_data, indent=2)
 
     except ValueError as e:
+        log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
     except RuntimeError as e:
         error_msg = str(e)
-        print(f"MCP Tool RuntimeError in compare_one_way_vs_roundtrip: {error_msg}", file=sys.stderr)
+        log_error(TOOL, "RuntimeError", error_msg)
 
         # Try to extract the Google Flights URL from the error
         google_flights_url = None
@@ -2258,8 +2285,10 @@ async def compare_one_way_vs_roundtrip(
 
         return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
+        import traceback
         error_msg = str(e)
-        print(f"MCP Tool Error in compare_one_way_vs_roundtrip: {error_msg}", file=sys.stderr)
+        log_error(TOOL, type(e).__name__, error_msg)
+        log_debug(TOOL, "traceback", traceback.format_exc())
 
         # Try to extract URL from any exception
         google_flights_url = None
@@ -2307,7 +2336,12 @@ async def generate_google_flights_url(
         {"origin": "SFO", "destination": "JFK", "departure_date": "2025-07-20"}
         {"origin": "SFO", "destination": "JFK", "departure_date": "2025-07-20", "return_date": "2025-07-27"}
     """
+    TOOL = "generate_google_flights_url"
+
     try:
+        trip_type = "round-trip" if return_date else "one-way"
+        log_info(TOOL, f"Generating {trip_type} URL: {origin}→{destination}")
+
         # Validate dates
         datetime.datetime.strptime(departure_date, '%Y-%m-%d')
         if return_date:
@@ -2340,6 +2374,8 @@ async def generate_google_flights_url(
 
         url = f"https://www.google.com/travel/flights/search?q={encoded_query}"
 
+        log_info(TOOL, f"URL generated successfully")
+
         output_data = {
             "url": url,
             "search_query": query,
@@ -2358,8 +2394,12 @@ async def generate_google_flights_url(
         return json.dumps(output_data, indent=2)
 
     except ValueError as e:
+        log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
     except Exception as e:
+        import traceback
+        log_error(TOOL, type(e).__name__, str(e))
+        log_debug(TOOL, "traceback", traceback.format_exc())
         return json.dumps({"error": {"message": str(e), "type": type(e).__name__}})
 
 
