@@ -50,89 +50,6 @@ def log_debug(tool_name: str, key: str, value: Any):
     """Structured debug logging for MCP tools."""
     print(f"[{tool_name}] DEBUG: {key} = {value}", file=sys.stderr)
 
-# --- Airline mappings ---
-# Map airline codes to common name patterns that might appear in Google Flights
-AIRLINE_CODE_TO_NAMES = {
-    # Major US carriers
-    "UA": ["United", "United Airlines"],
-    "AA": ["American", "American Airlines"],
-    "DL": ["Delta", "Delta Air Lines"],
-    "WN": ["Southwest", "Southwest Airlines"],
-    "B6": ["JetBlue", "JetBlue Airways"],
-    "AS": ["Alaska", "Alaska Airlines"],
-    "NK": ["Spirit", "Spirit Airlines"],
-    "F9": ["Frontier", "Frontier Airlines"],
-
-    # Major international carriers
-    "BA": ["British Airways"],
-    "LH": ["Lufthansa"],
-    "AF": ["Air France"],
-    "KL": ["KLM"],
-    "AC": ["Air Canada"],
-    "QF": ["Qantas"],
-    "EK": ["Emirates"],
-    "QR": ["Qatar Airways"],
-    "SQ": ["Singapore Airlines"],
-    "CX": ["Cathay Pacific"],
-    "NH": ["ANA", "All Nippon Airways"],
-    "JL": ["JAL", "Japan Airlines"],
-    "TK": ["Turkish Airlines"],
-    "LX": ["Swiss", "Swiss International Air Lines"],
-    "OS": ["Austrian", "Austrian Airlines"],
-    "SK": ["SAS", "Scandinavian Airlines"],
-    "AY": ["Finnair"],
-    "IB": ["Iberia"],
-    "TP": ["TAP", "TAP Air Portugal"],
-    "EI": ["Aer Lingus"],
-    "AZ": ["ITA Airways"],
-    "SN": ["Brussels Airlines"],
-    "LO": ["LOT Polish Airlines"],
-}
-
-# Define airline alliances
-AIRLINE_ALLIANCES = {
-    "STAR_ALLIANCE": ["UA", "AC", "LH", "NH", "SQ", "TK", "LX", "OS", "SK", "AY", "TP", "SN", "LO"],
-    "SKYTEAM": ["DL", "AF", "KL", "AZ"],
-    "ONEWORLD": ["AA", "BA", "QF", "CX", "JL", "IB", "EI", "QR"],
-}
-
-def matches_airline_filter(flight_name: str, airline_codes: list) -> bool:
-    """
-    Check if a flight's airline name matches any of the specified airline codes.
-
-    Args:
-        flight_name: The airline name from the flight object (e.g., "United", "Delta Air Lines")
-        airline_codes: List of airline codes (e.g., ["UA", "AA"]) or alliance names
-
-    Returns:
-        True if the flight matches any of the airline filters
-    """
-    if not flight_name:
-        return False
-
-    flight_name_lower = flight_name.lower()
-
-    for code in airline_codes:
-        # Check if it's an alliance
-        if code in AIRLINE_ALLIANCES:
-            # Expand alliance to member airlines
-            member_airlines = AIRLINE_ALLIANCES[code]
-            for member_code in member_airlines:
-                if member_code in AIRLINE_CODE_TO_NAMES:
-                    for name in AIRLINE_CODE_TO_NAMES[member_code]:
-                        if name.lower() in flight_name_lower:
-                            return True
-        # Check if it's a known airline code
-        elif code in AIRLINE_CODE_TO_NAMES:
-            for name in AIRLINE_CODE_TO_NAMES[code]:
-                if name.lower() in flight_name_lower:
-                    return True
-        # Direct string match as fallback
-        elif code.lower() in flight_name_lower:
-            return True
-
-    return False
-
 def flight_to_dict(flight):
     """Converts a flight object to a dictionary, handling potential missing attributes."""
     return {
@@ -1687,14 +1604,14 @@ async def search_flights_by_airline(
             log_debug(TOOL, "dates", f"{date} to {return_date}")
 
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
-                FlightData(date=return_date, from_airport=destination, to_airport=origin),
+                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
+                FlightData(date=return_date, from_airport=destination, to_airport=origin, airlines=airlines_list),
             ]
             trip_type = "round-trip"
         else:
             log_debug(TOOL, "date", date)
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
+                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
             ]
             trip_type = "one-way"
 
@@ -1710,36 +1627,13 @@ async def search_flights_by_airline(
         )
 
         if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} flight(s) before filtering")
-
-            # Filter flights by airline
-            filtered_flights = [
-                f for f in result.flights
-                if matches_airline_filter(getattr(f, 'name', ''), airlines_list)
-            ]
-
-            if not filtered_flights:
-                return json.dumps({
-                    "message": f"No flights found matching airlines {airlines_list} on {date} with max {max_stops} stops.",
-                    "search_parameters": {
-                        "origin": origin,
-                        "destination": destination,
-                        "date": date,
-                        "airlines": airlines_list,
-                        "is_round_trip": is_round_trip,
-                        "return_date": return_date if is_round_trip else None,
-                        "max_stops": max_stops
-                    }
-                })
-
-            log_info(TOOL, f"Filtered to {len(filtered_flights)} flight(s) matching airlines {airlines_list}")
-
+            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
             if return_cheapest_only:
-                cheapest_flight = min(filtered_flights, key=lambda f: parse_price(f.price))
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight)]
                 result_key = "cheapest_flight_by_airline"
             else:
-                processed_flights = [flight_to_dict(f) for f in filtered_flights]
+                processed_flights = [flight_to_dict(f) for f in result.flights]
                 result_key = "flights_by_airline"
 
             output_data = {
