@@ -1015,9 +1015,48 @@ async def get_multi_city_flights(
 
     except json.JSONDecodeError as e:
         return json.dumps({"error": {"message": f"Invalid JSON in flight_segments: {str(e)}", "type": "JSONDecodeError"}})
+    except RuntimeError as e:
+        error_msg = str(e)
+        print(f"MCP Tool RuntimeError in get_multi_city_flights: {error_msg}", file=sys.stderr)
+
+        # Try to extract the Google Flights URL from the error
+        # The fast-flights library often includes the URL in the error trace
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            # Extract the URL from the error message
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        # Check if it's a "No flights found" error from fast-flights
+        if "No flights found" in error_msg:
+            response_data = {
+                "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
+                "search_parameters": {"segments": segments, "adults": adults, "seat_type": seat_type},
+                "note": "Multi-city searches may not return results via scraping. Click the URL below to view flights in your browser."
+            }
+            if google_flights_url:
+                response_data["google_flights_url"] = google_flights_url
+            return json.dumps(response_data)
+
+        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
-        print(f"MCP Tool Error in get_multi_city_flights: {e}", file=sys.stderr)
-        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+        error_msg = str(e)
+        print(f"MCP Tool Error in get_multi_city_flights: {error_msg}", file=sys.stderr)
+
+        # Try to extract URL from any exception
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        response_data = {"error": {"message": error_msg, "type": type(e).__name__}}
+        if google_flights_url:
+            response_data["google_flights_url"] = google_flights_url
+        return json.dumps(response_data)
 
 
 @mcp.tool()
