@@ -10,7 +10,6 @@ from typing import Any, Optional, Dict
 # Import fast_flights from pip package
 try:
     from fast_flights import FlightData, Passengers, get_flights
-    from fast_flights import search_airports as search_airports_lib
 except ImportError as e:
     print(f"Error importing fast_flights: {e}", file=sys.stderr)
     print(f"Please install fast_flights: pip install fast-flights", file=sys.stderr)
@@ -35,6 +34,34 @@ def get_all_airports():
             print(f"Warning: Could not load airports: {e}", file=sys.stderr)
             _airports_cache = []
     return _airports_cache
+
+
+def search_airports_lib(query: str):
+    """
+    Search for airports by name or code.
+
+    Args:
+        query: Search term (airport name, city, or code)
+
+    Returns:
+        List of matching Airport enum objects
+    """
+    airports = get_all_airports()
+    if not airports:
+        return []
+
+    query_lower = query.lower()
+    results = []
+
+    for airport in airports:
+        # Search in both the airport code (value) and name
+        airport_code = airport.value.lower() if hasattr(airport, 'value') else ''
+        airport_name = airport.name.lower() if hasattr(airport, 'name') else ''
+
+        if query_lower in airport_code or query_lower in airport_name:
+            results.append(airport)
+
+    return results
 
 
 # --- Helper functions ---
