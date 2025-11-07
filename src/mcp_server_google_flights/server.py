@@ -688,11 +688,15 @@ async def search_round_trip_flights(
     infants_in_seat: int = 0,
     infants_on_lap: int = 0,
     seat_type: str = "economy",
+    max_stops: int = 2,
     return_cheapest_only: bool = False
 ) -> str:
     """
     Fetches available round-trip flights for specific departure and return dates.
     Can optionally return only the cheapest flight found.
+
+    💡 TIP: Default max_stops=2 provides more reliable scraping. For direct flights only,
+    use search_direct_flights() with is_round_trip=True instead.
 
     Args:
         origin: Origin airport code (e.g., "DEN").
@@ -704,11 +708,14 @@ async def search_round_trip_flights(
         infants_in_seat: Number of infants in seat (under 2 years, default: 0).
         infants_on_lap: Number of infants on lap (under 2 years, default: 0).
         seat_type: Fare class - economy/premium_economy/business/first (default: "economy").
+        max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
+                   Lower values = more reliable scraping. Set higher if needed, but may reduce reliability.
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
 
     Example Args:
         {"origin": "DEN", "destination": "LAX", "departure_date": "2025-08-01", "return_date": "2025-08-08"}
         {"origin": "DEN", "destination": "LAX", "departure_date": "2025-08-01", "return_date": "2025-08-08", "adults": 2, "children": 2}
+        {"origin": "DEN", "destination": "LAX", "departure_date": "2025-08-01", "return_date": "2025-08-08", "max_stops": 0}
     """
     print(f"MCP Tool: Getting round trip {origin}<->{destination} for {departure_date} to {return_date}...", file=sys.stderr)
     try:
@@ -732,6 +739,7 @@ async def search_round_trip_flights(
             trip="round-trip",
             seat=seat_type,
             passengers=passengers_info,
+            max_stops=max_stops
         )
 
         if result and result.flights:
@@ -757,6 +765,7 @@ async def search_round_trip_flights(
                     "infants_in_seat": infants_in_seat,
                     "infants_on_lap": infants_on_lap,
                     "seat_type": seat_type,
+                    "max_stops": max_stops,
                     "return_cheapest_only": return_cheapest_only
                 },
                 result_key: processed_flights
@@ -764,8 +773,8 @@ async def search_round_trip_flights(
             return json.dumps(output_data, indent=2)
         else:
              return json.dumps({
-                "message": f"No round trip flights found for {origin} <-> {destination} from {departure_date} to {return_date}.",
-                 "search_parameters": { "origin": origin, "destination": destination, "departure_date": departure_date, "return_date": return_date, "adults": adults, "seat_type": seat_type }
+                "message": f"No round trip flights found for {origin} <-> {destination} from {departure_date} to {return_date} with max {max_stops} stops.",
+                 "search_parameters": { "origin": origin, "destination": destination, "departure_date": departure_date, "return_date": return_date, "adults": adults, "seat_type": seat_type, "max_stops": max_stops }
             })
 
     except ValueError as e:
@@ -799,9 +808,10 @@ async def search_round_trip_flights(
                     "children": children,
                     "infants_in_seat": infants_in_seat,
                     "infants_on_lap": infants_on_lap,
-                    "seat_type": seat_type
+                    "seat_type": seat_type,
+                    "max_stops": max_stops
                 },
-                "note": "Round-trip searches may not return results via scraping. Click the URL below to view flights in your browser."
+                "note": f"Round-trip searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser."
             }
             if google_flights_url:
                 response_data["google_flights_url"] = google_flights_url
