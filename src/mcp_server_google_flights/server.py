@@ -531,10 +531,15 @@ async def get_travel_dates(
     Example Args:
         {"days_from_now": 45, "trip_length": 10}
     """
+    TOOL = "get_travel_dates"
+    log_info(TOOL, f"Calculating dates: +{days_from_now} days, {trip_length} day trip")
+
     try:
         today = datetime.date.today()
         departure_date = today + datetime.timedelta(days=days_from_now)
         return_date = departure_date + datetime.timedelta(days=trip_length)
+
+        log_info(TOOL, f"Suggested: {departure_date.strftime('%Y-%m-%d')} to {return_date.strftime('%Y-%m-%d')}")
 
         return json.dumps({
             "today": today.strftime('%Y-%m-%d'),
@@ -544,6 +549,7 @@ async def get_travel_dates(
             "days_until_departure": days_from_now
         }, indent=2)
     except Exception as e:
+        log_error(TOOL, type(e).__name__, str(e))
         return json.dumps({"error": {"message": str(e), "type": type(e).__name__}})
 
 
@@ -1073,27 +1079,37 @@ async def get_multi_city_flights(
     Example Args:
         {"flight_segments": '[{"date": "2025-07-01", "from": "SFO", "to": "NYC"}, {"date": "2025-07-05", "from": "NYC", "to": "MIA"}]'}
     """
-    print(f"MCP Tool: Getting multi-city flights...", file=sys.stderr)
+    TOOL = "get_multi_city_flights"
+
     try:
         # Parse the flight segments JSON
         segments = json.loads(flight_segments)
 
         if not segments or not isinstance(segments, list):
+            log_error(TOOL, "ValueError", "flight_segments must be a non-empty JSON array")
             return json.dumps({"error": {"message": "flight_segments must be a non-empty JSON array", "type": "ValueError"}})
 
         if len(segments) < 2:
+            log_error(TOOL, "ValueError", f"Multi-city requires ≥2 segments, got {len(segments)}")
             return json.dumps({"error": {"message": "Multi-city trips require at least 2 flight segments", "type": "ValueError"}})
+
+        # Build route description
+        route = " → ".join([f"{s['from']}" for s in segments] + [segments[-1]['to']])
+        log_info(TOOL, f"Multi-city route: {route} ({len(segments)} segments)")
+        log_debug(TOOL, "constraints", f"adults={adults}, seat={seat_type}")
 
         # Validate and build flight data
         flight_data = []
         for i, segment in enumerate(segments):
             if not all(k in segment for k in ["date", "from", "to"]):
+                log_error(TOOL, "ValueError", f"Segment {i} missing required fields")
                 return json.dumps({"error": {"message": f"Segment {i} missing required fields (date, from, to)", "type": "ValueError"}})
 
             # Validate date format
             try:
                 datetime.datetime.strptime(segment["date"], '%Y-%m-%d')
             except ValueError:
+                log_error(TOOL, "ValueError", f"Segment {i} invalid date: {segment['date']}")
                 return json.dumps({"error": {"message": f"Invalid date format in segment {i}: '{segment['date']}'. Use YYYY-MM-DD.", "type": "ValueError"}})
 
             flight_data.append(
@@ -1102,6 +1118,7 @@ async def get_multi_city_flights(
 
         passengers_info = Passengers(adults=adults)
 
+        log_info(TOOL, "Fetching flights from Google Flights...")
         result = get_flights(
             flight_data=flight_data,
             trip="multi-city",
@@ -1110,6 +1127,7 @@ async def get_multi_city_flights(
         )
 
         if result and result.flights:
+            log_info(TOOL, f"Found {len(result.flights)} multi-city option(s)")
             if return_cheapest_only:
                 cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight)]
@@ -1135,10 +1153,11 @@ async def get_multi_city_flights(
             })
 
     except json.JSONDecodeError as e:
+        log_error(TOOL, "JSONDecodeError", f"Invalid JSON in flight_segments: {str(e)}")
         return json.dumps({"error": {"message": f"Invalid JSON in flight_segments: {str(e)}", "type": "JSONDecodeError"}})
     except RuntimeError as e:
         error_msg = str(e)
-        print(f"MCP Tool RuntimeError in get_multi_city_flights: {error_msg}", file=sys.stderr)
+        log_error(TOOL, "RuntimeError", error_msg)
 
         # Try to extract the Google Flights URL from the error
         # The fast-flights library often includes the URL in the error trace
@@ -1163,8 +1182,10 @@ async def get_multi_city_flights(
 
         return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
+        import traceback
         error_msg = str(e)
-        print(f"MCP Tool Error in get_multi_city_flights: {error_msg}", file=sys.stderr)
+        log_error(TOOL, type(e).__name__, error_msg)
+        log_debug(TOOL, "traceback", traceback.format_exc())
 
         # Try to extract URL from any exception
         google_flights_url = None
@@ -1219,41 +1240,42 @@ async def compare_nearby_airports(
         {"origin_airports": "SFO", "destination_airports": "JFK", "date": "2025-07-20"}
         {"origin_airports": '["SFO", "OAK"]', "destination_airports": '["JFK", "EWR"]', "date": "2025-07-20"}
     """
-    # Rate limit protection
+    TOOL = "compare_nearby_airports"
     MAX_AIRPORT_COMBINATIONS = 12
-    print(f"MCP Tool: Comparing flights across multiple airports for {date}...", file=sys.stderr)
+
     try:
         # Parse airport arrays - accept both plain strings or JSON arrays
-        # Parse origins
         try:
             origins = json.loads(origin_airports)
             if not isinstance(origins, list):
                 origins = [origins]
         except json.JSONDecodeError:
-            # Treat as plain string
             origins = [origin_airports]
 
-        # Parse destinations
         try:
             destinations = json.loads(destination_airports)
             if not isinstance(destinations, list):
                 destinations = [destinations]
         except json.JSONDecodeError:
-            # Treat as plain string
             destinations = [destination_airports]
 
         if not origins or not destinations:
+            log_error(TOOL, "ValueError", "Airport lists cannot be empty")
             return json.dumps({"error": {"message": "Airport lists cannot be empty", "type": "ValueError"}})
+
+        log_info(TOOL, f"Comparing {origins} → {destinations} on {date}")
+        total_combinations = len(origins) * len(destinations)
+        log_debug(TOOL, "combinations", f"{len(origins)}×{len(destinations)} = {total_combinations}")
 
         # Validate date format
         try:
             datetime.datetime.strptime(date, '%Y-%m-%d')
         except ValueError:
+            log_error(TOOL, "ValueError", f"Invalid date: {date}")
             return json.dumps({"error": {"message": f"Invalid date format: '{date}'. Use YYYY-MM-DD.", "type": "ValueError"}})
 
         # Search all combinations
         comparisons = []
-        total_combinations = len(origins) * len(destinations)
 
         # Enforce rate limit protection
         if total_combinations > MAX_AIRPORT_COMBINATIONS:
@@ -1271,12 +1293,13 @@ async def compare_nearby_airports(
                 }
             })
 
+        log_info(TOOL, f"Checking {total_combinations} route combination(s)...")
         count = 0
 
         for origin in origins:
             for destination in destinations:
                 count += 1
-                print(f"MCP Tool Progress: Checking {origin} -> {destination} ({count}/{total_combinations})...", file=sys.stderr)
+                log_info(TOOL, f"Progress: {count}/{total_combinations} - {origin}→{destination}")
 
                 try:
                     flight_data = [
@@ -1340,11 +1363,14 @@ async def compare_nearby_airports(
 
         if valid_comparisons:
             output_data["best_deal"] = valid_comparisons[0]
+            log_info(TOOL, f"Best deal: {valid_comparisons[0]['origin']}→{valid_comparisons[0]['destination']} at {valid_comparisons[0]['price']}")
 
         return json.dumps(output_data, indent=2)
 
     except Exception as e:
-        print(f"MCP Tool Error in compare_nearby_airports: {e}", file=sys.stderr)
+        import traceback
+        log_error(TOOL, type(e).__name__, str(e))
+        log_debug(TOOL, "traceback", traceback.format_exc())
         return json.dumps({"error": {"message": f"An unexpected error occurred: {str(e)}", "type": type(e).__name__}})
 
 
@@ -1382,26 +1408,32 @@ async def search_direct_flights(
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20"}
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "is_round_trip": true, "return_date": "2025-07-27"}
     """
-    print(f"MCP Tool: Searching direct flights {origin}->{destination} for {date}...", file=sys.stderr)
+    TOOL = "search_direct_flights"
+
     try:
         # Validate date format
         datetime.datetime.strptime(date, '%Y-%m-%d')
 
         if is_round_trip:
             if not return_date:
+                log_error(TOOL, "ValueError", "return_date required for round-trip")
                 return json.dumps({"error": {"message": "return_date is required when is_round_trip=True", "type": "ValueError"}})
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
+            log_info(TOOL, f"Direct round-trip {origin}↔{destination} ({date} to {return_date})")
             flight_data = [
                 FlightData(date=date, from_airport=origin, to_airport=destination),
                 FlightData(date=return_date, from_airport=destination, to_airport=origin),
             ]
             trip_type = "round-trip"
         else:
+            log_info(TOOL, f"Direct one-way {origin}→{destination} on {date}")
             flight_data = [
                 FlightData(date=date, from_airport=origin, to_airport=destination),
             ]
             trip_type = "one-way"
+
+        log_debug(TOOL, "constraints", f"max_stops=0 (direct only), seat={seat_type}, adults={adults}")
 
         passengers_info = Passengers(
             adults=adults,
@@ -1410,6 +1442,7 @@ async def search_direct_flights(
             infants_on_lap=infants_on_lap
         )
 
+        log_info(TOOL, "Fetching direct flights from Google Flights...")
         result = get_flights(
             flight_data=flight_data,
             trip=trip_type,
@@ -1419,6 +1452,7 @@ async def search_direct_flights(
         )
 
         if result and result.flights:
+            log_info(TOOL, f"Found {len(result.flights)} direct flight(s)")
             if return_cheapest_only:
                 cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight)]
@@ -1450,10 +1484,11 @@ async def search_direct_flights(
             })
 
     except ValueError as e:
+        log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
     except RuntimeError as e:
         error_msg = str(e)
-        print(f"MCP Tool RuntimeError in search_direct_flights: {error_msg}", file=sys.stderr)
+        log_error(TOOL, "RuntimeError", error_msg)
 
         # Try to extract the Google Flights URL from the error
         google_flights_url = None
@@ -1483,8 +1518,10 @@ async def search_direct_flights(
 
         return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
+        import traceback
         error_msg = str(e)
-        print(f"MCP Tool Error in search_direct_flights: {error_msg}", file=sys.stderr)
+        log_error(TOOL, type(e).__name__, error_msg)
+        log_debug(TOOL, "traceback", traceback.format_exc())
 
         # Try to extract URL from any exception
         google_flights_url = None
@@ -1710,10 +1747,12 @@ async def search_flights_with_max_stops(
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "max_stops": 1}
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "max_stops": 0, "is_round_trip": true, "return_date": "2025-07-27"}
     """
-    print(f"MCP Tool: Searching flights with max {max_stops} stops {origin}->{destination}...", file=sys.stderr)
+    TOOL = "search_flights_with_max_stops"
+
     try:
         # Validate max_stops
         if max_stops not in [0, 1, 2]:
+            log_error(TOOL, "ValueError", f"Invalid max_stops: {max_stops} (must be 0, 1, or 2)")
             return json.dumps({"error": {"message": "max_stops must be 0, 1, or 2", "type": "ValueError"}})
 
         # Validate dates
@@ -1721,15 +1760,18 @@ async def search_flights_with_max_stops(
 
         if is_round_trip:
             if not return_date:
+                log_error(TOOL, "ValueError", "return_date required for round-trip")
                 return json.dumps({"error": {"message": "return_date is required when is_round_trip=True", "type": "ValueError"}})
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
+            log_info(TOOL, f"Round-trip {origin}↔{destination} with ≤{max_stops} stops ({date} to {return_date})")
             flight_data = [
                 FlightData(date=date, from_airport=origin, to_airport=destination),
                 FlightData(date=return_date, from_airport=destination, to_airport=origin),
             ]
             trip_type = "round-trip"
         else:
+            log_info(TOOL, f"One-way {origin}→{destination} with ≤{max_stops} stops on {date}")
             flight_data = [
                 FlightData(date=date, from_airport=origin, to_airport=destination),
             ]
@@ -1737,6 +1779,7 @@ async def search_flights_with_max_stops(
 
         passengers_info = Passengers(adults=adults)
 
+        log_info(TOOL, "Fetching flights from Google Flights...")
         result = get_flights(
             flight_data=flight_data,
             trip=trip_type,
@@ -1746,6 +1789,7 @@ async def search_flights_with_max_stops(
         )
 
         if result and result.flights:
+            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
             if return_cheapest_only:
                 cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight)]
@@ -1776,10 +1820,11 @@ async def search_flights_with_max_stops(
             })
 
     except ValueError as e:
+        log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
     except RuntimeError as e:
         error_msg = str(e)
-        print(f"MCP Tool RuntimeError in search_flights_with_max_stops: {error_msg}", file=sys.stderr)
+        log_error(TOOL, "RuntimeError", error_msg)
 
         # Try to extract the Google Flights URL from the error
         google_flights_url = None
@@ -1809,8 +1854,10 @@ async def search_flights_with_max_stops(
 
         return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
+        import traceback
         error_msg = str(e)
-        print(f"MCP Tool Error in search_flights_with_max_stops: {error_msg}", file=sys.stderr)
+        log_error(TOOL, type(e).__name__, error_msg)
+        log_debug(TOOL, "traceback", traceback.format_exc())
 
         # Try to extract URL from any exception
         google_flights_url = None
