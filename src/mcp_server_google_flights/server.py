@@ -626,11 +626,55 @@ async def search_one_way_flights(
          # Return structured error
          error_payload = {"error": {"message": f"Invalid date format: '{date}'. Please use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
+    except RuntimeError as e:
+        error_msg = str(e)
+        print(f"MCP Tool RuntimeError in search_one_way_flights: {error_msg}", file=sys.stderr)
+
+        # Try to extract the Google Flights URL from the error
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        # Check if it's a "No flights found" error from fast-flights
+        if "No flights found" in error_msg:
+            response_data = {
+                "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "date": date,
+                    "adults": adults,
+                    "children": children,
+                    "infants_in_seat": infants_in_seat,
+                    "infants_on_lap": infants_on_lap,
+                    "seat_type": seat_type
+                },
+                "note": "One-way searches may not return results via scraping. Click the URL below to view flights in your browser."
+            }
+            if google_flights_url:
+                response_data["google_flights_url"] = google_flights_url
+            return json.dumps(response_data)
+
+        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
-        print(f"MCP Tool Error in search_one_way_flights: {e}", file=sys.stderr)
-        # Return structured error
-        error_payload = {"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}}
-        return json.dumps(error_payload)
+        error_msg = str(e)
+        print(f"MCP Tool Error in search_one_way_flights: {error_msg}", file=sys.stderr)
+
+        # Try to extract URL from any exception
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        response_data = {"error": {"message": error_msg, "type": type(e).__name__}}
+        if google_flights_url:
+            response_data["google_flights_url"] = google_flights_url
+        return json.dumps(response_data)
 
 
 @mcp.tool()
@@ -728,11 +772,58 @@ async def search_round_trip_flights(
          # Return structured error
          error_payload = {"error": {"message": f"Invalid date format provided. Use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
+    except RuntimeError as e:
+        error_msg = str(e)
+        print(f"MCP Tool RuntimeError in search_round_trip_flights: {error_msg}", file=sys.stderr)
+
+        # Try to extract the Google Flights URL from the error
+        # The fast-flights library often includes the URL in the error trace
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            # Extract the URL from the error message
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        # Check if it's a "No flights found" error from fast-flights
+        if "No flights found" in error_msg:
+            response_data = {
+                "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "departure_date": departure_date,
+                    "return_date": return_date,
+                    "adults": adults,
+                    "children": children,
+                    "infants_in_seat": infants_in_seat,
+                    "infants_on_lap": infants_on_lap,
+                    "seat_type": seat_type
+                },
+                "note": "Round-trip searches may not return results via scraping. Click the URL below to view flights in your browser."
+            }
+            if google_flights_url:
+                response_data["google_flights_url"] = google_flights_url
+            return json.dumps(response_data)
+
+        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
-        print(f"MCP Tool Error in search_round_trip_flights: {e}", file=sys.stderr)
-        # Return structured error
-        error_payload = {"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}}
-        return json.dumps(error_payload)
+        error_msg = str(e)
+        print(f"MCP Tool Error in search_round_trip_flights: {error_msg}", file=sys.stderr)
+
+        # Try to extract URL from any exception
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        response_data = {"error": {"message": error_msg, "type": type(e).__name__}}
+        if google_flights_url:
+            response_data["google_flights_url"] = google_flights_url
+        return json.dumps(response_data)
 
 
 @mcp.tool()
@@ -1309,9 +1400,53 @@ async def search_direct_flights(
 
     except ValueError as e:
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except RuntimeError as e:
+        error_msg = str(e)
+        print(f"MCP Tool RuntimeError in search_direct_flights: {error_msg}", file=sys.stderr)
+
+        # Try to extract the Google Flights URL from the error
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        # Check if it's a "No flights found" error from fast-flights
+        if "No flights found" in error_msg:
+            response_data = {
+                "message": "The scraper couldn't find direct flights, but you can view results directly on Google Flights.",
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "date": date,
+                    "is_round_trip": is_round_trip,
+                    "return_date": return_date if is_round_trip else None,
+                    "max_stops": 0
+                },
+                "note": "Direct flight searches may not return results via scraping. Click the URL below to view flights in your browser."
+            }
+            if google_flights_url:
+                response_data["google_flights_url"] = google_flights_url
+            return json.dumps(response_data)
+
+        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
-        print(f"MCP Tool Error in search_direct_flights: {e}", file=sys.stderr)
-        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+        error_msg = str(e)
+        print(f"MCP Tool Error in search_direct_flights: {error_msg}", file=sys.stderr)
+
+        # Try to extract URL from any exception
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        response_data = {"error": {"message": error_msg, "type": type(e).__name__}}
+        if google_flights_url:
+            response_data["google_flights_url"] = google_flights_url
+        return json.dumps(response_data)
 
 
 @mcp.tool()
@@ -1417,9 +1552,57 @@ async def search_flights_by_airline(
 
     except ValueError as e:
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except RuntimeError as e:
+        error_msg = str(e)
+        print(f"MCP Tool RuntimeError in search_flights_by_airline: {error_msg}", file=sys.stderr)
+
+        # Try to extract the Google Flights URL from the error
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        # Check if it's a "No flights found" error from fast-flights
+        if "No flights found" in error_msg:
+            try:
+                airlines_list = json.loads(airlines)
+            except:
+                airlines_list = []
+            response_data = {
+                "message": "The scraper couldn't find flights for the specified airlines, but you can view results directly on Google Flights.",
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "date": date,
+                    "airlines": airlines_list,
+                    "is_round_trip": is_round_trip,
+                    "return_date": return_date if is_round_trip else None
+                },
+                "note": "Airline-filtered searches may not return results via scraping. Click the URL below to view flights in your browser."
+            }
+            if google_flights_url:
+                response_data["google_flights_url"] = google_flights_url
+            return json.dumps(response_data)
+
+        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
-        print(f"MCP Tool Error in search_flights_by_airline: {e}", file=sys.stderr)
-        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+        error_msg = str(e)
+        print(f"MCP Tool Error in search_flights_by_airline: {error_msg}", file=sys.stderr)
+
+        # Try to extract URL from any exception
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        response_data = {"error": {"message": error_msg, "type": type(e).__name__}}
+        if google_flights_url:
+            response_data["google_flights_url"] = google_flights_url
+        return json.dumps(response_data)
 
 
 @mcp.tool()
@@ -1519,9 +1702,53 @@ async def search_flights_with_max_stops(
 
     except ValueError as e:
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except RuntimeError as e:
+        error_msg = str(e)
+        print(f"MCP Tool RuntimeError in search_flights_with_max_stops: {error_msg}", file=sys.stderr)
+
+        # Try to extract the Google Flights URL from the error
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        # Check if it's a "No flights found" error from fast-flights
+        if "No flights found" in error_msg:
+            response_data = {
+                "message": "The scraper couldn't find flights with the specified stop criteria, but you can view results directly on Google Flights.",
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "date": date,
+                    "max_stops": max_stops,
+                    "is_round_trip": is_round_trip,
+                    "return_date": return_date if is_round_trip else None
+                },
+                "note": "Max-stops searches may not return results via scraping. Click the URL below to view flights in your browser."
+            }
+            if google_flights_url:
+                response_data["google_flights_url"] = google_flights_url
+            return json.dumps(response_data)
+
+        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
-        print(f"MCP Tool Error in search_flights_with_max_stops: {e}", file=sys.stderr)
-        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+        error_msg = str(e)
+        print(f"MCP Tool Error in search_flights_with_max_stops: {error_msg}", file=sys.stderr)
+
+        # Try to extract URL from any exception
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        response_data = {"error": {"message": error_msg, "type": type(e).__name__}}
+        if google_flights_url:
+            response_data["google_flights_url"] = google_flights_url
+        return json.dumps(response_data)
 
 
 @mcp.tool()
@@ -1877,9 +2104,53 @@ async def compare_one_way_vs_roundtrip(
 
     except ValueError as e:
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except RuntimeError as e:
+        error_msg = str(e)
+        print(f"MCP Tool RuntimeError in compare_one_way_vs_roundtrip: {error_msg}", file=sys.stderr)
+
+        # Try to extract the Google Flights URL from the error
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        # Check if it's a "No flights found" error from fast-flights
+        if "No flights found" in error_msg:
+            response_data = {
+                "message": "The scraper couldn't complete the comparison, but you can view results directly on Google Flights.",
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "departure_date": departure_date,
+                    "return_date": return_date,
+                    "adults": adults,
+                    "seat_type": seat_type
+                },
+                "note": "Comparison searches may not return results via scraping. Click the URL below to view flights in your browser."
+            }
+            if google_flights_url:
+                response_data["google_flights_url"] = google_flights_url
+            return json.dumps(response_data)
+
+        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
-        print(f"MCP Tool Error in compare_one_way_vs_roundtrip: {e}", file=sys.stderr)
-        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
+        error_msg = str(e)
+        print(f"MCP Tool Error in compare_one_way_vs_roundtrip: {error_msg}", file=sys.stderr)
+
+        # Try to extract URL from any exception
+        google_flights_url = None
+        if "https://www.google.com/travel/flights" in error_msg:
+            import re
+            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
+            if url_match:
+                google_flights_url = url_match.group(1)
+
+        response_data = {"error": {"message": error_msg, "type": type(e).__name__}}
+        if google_flights_url:
+            response_data["google_flights_url"] = google_flights_url
+        return json.dumps(response_data)
 
 
 # --- URL Generation Tool ---
