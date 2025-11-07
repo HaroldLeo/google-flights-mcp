@@ -23,10 +23,9 @@ Transform how you search for flights with AI assistance. This MCP server integra
 - Compare prices across multiple airports and dates
 - Find the cheapest travel dates automatically
 - Plan complex multi-city itineraries
-- Get flexible date price grids
 - Filter by passengers, cabin class, and preferences
 
-Built on the powerful `fast-flights` library, this server provides 15 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
+Built on the powerful `fast-flights` library, this server provides 14 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
 
 ---
 
@@ -46,7 +45,7 @@ Built on the powerful `fast-flights` library, this server provides 15 specialize
 
 ## Features
 
-### Flight Search Tools (15 Total)
+### Flight Search Tools (14 Total)
 
 #### Core Search Tools
 
@@ -56,7 +55,6 @@ Built on the powerful `fast-flights` library, this server provides 15 specialize
 | `search_round_trip_flights` | Round-trip flights with fixed dates | Standard vacation planning |
 | `search_round_trips_in_date_range` | Flexible date range search | Finding the best deal within a window |
 | `get_multi_city_flights` | Multi-stop itineraries | Complex trips with multiple destinations |
-| `get_flexible_dates_grid` | Price matrix across date combinations | Visualizing price trends |
 | `compare_nearby_airports` | Multi-airport price comparison | Comparing NYC airports (JFK/LGA/EWR) |
 
 #### Specialized Search Tools
@@ -288,14 +286,6 @@ You: "Compare flight prices from all NYC airports to Miami on December 20, 2026.
 
 The AI will use `compare_nearby_airports` with JFK, LGA, and EWR.
 
-### Example 5: Flexible Date Grid
-
-```
-You: "Show me a price calendar for Los Angeles to Honolulu in April 2026."
-```
-
-The AI will use `get_flexible_dates_grid` to show prices across different date combinations.
-
 ---
 
 ## API Reference
@@ -380,23 +370,6 @@ Search complex multi-city itineraries.
 - `return_cheapest_only` (boolean, default: false): Return only cheapest option
 
 **Returns:** Multi-city itinerary options with total prices.
-
----
-
-#### `get_flexible_dates_grid`
-
-Get a price grid showing flight costs across different date combinations.
-
-**Parameters:**
-- `origin` (string, required): Departure airport code
-- `destination` (string, required): Arrival airport code
-- `departure_month` (string, required): Outbound month (YYYY-MM)
-- `return_month` (string, required): Return month (YYYY-MM)
-- `adults` (integer, default: 1): Number of adults
-- `seat_type` (string, default: "economy"): Cabin class
-- `max_results` (integer, default: 50): Maximum results to return
-
-**Returns:** Grid of prices for different date combinations.
 
 ---
 
@@ -667,7 +640,6 @@ playwright install --with-deps
 
 **Explanation:** The server scrapes Google Flights in real-time, which can be slow, especially for:
 - `search_round_trips_in_date_range` with large date ranges
-- `get_flexible_dates_grid` with full months
 - `compare_nearby_airports` with many airports
 
 **Solutions:**

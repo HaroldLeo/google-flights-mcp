@@ -136,9 +136,8 @@ def find_best_deal() -> str:
    - Try different stay durations (e.g., 3-7 days, 7-14 days)
 3. If you have nearby airports, use `compare_nearby_airports` to check all combinations
    - Example: NYC has JFK, LGA, EWR; SF Bay has SFO, OAK, SJC
-4. Use `get_flexible_dates_grid` to visualize price patterns across entire months
-5. Compare results and identify the cheapest option
-6. Use `generate_google_flights_url` to create a direct booking link
+4. Compare results and identify the cheapest option
+5. Use `generate_google_flights_url` to create a direct booking link
 
 **What I need from you:**
 - Origin city/airport (I'll find nearby alternatives)
@@ -298,9 +297,7 @@ def budget_backpacker() -> str:
 4. Filter by `filter_by_departure_time` for "red-eye" flights
    - Overnight flights are often cheaper
    - Saves a night of accommodation
-5. Use `get_flexible_dates_grid` to visualize price patterns
-   - Find the cheapest travel days in the month
-6. Consider `compare_one_way_vs_roundtrip`
+5. Consider `compare_one_way_vs_roundtrip`
    - Mix and match airlines for best prices
 
 **Budget Travel Priorities:**
@@ -385,8 +382,7 @@ def holiday_peak_travel() -> str:
    - Check +/- 3 days around peak dates
 3. Use `compare_nearby_airports` - secondary airports may have better availability
 4. Use `search_direct_flights` if available (connections get more risky during holidays)
-5. Check `get_flexible_dates_grid` for entire holiday month
-6. Book EARLY - peak travel sells out fast
+5. Book EARLY - peak travel sells out fast
 
 **Peak Holiday Periods:**
 - Thanksgiving: Wednesday before through Sunday after
@@ -429,8 +425,7 @@ def long_haul_international() -> str:
    - Reduces jet lag and travel time
 5. Compare `seat_type="business"` or `seat_type="premium_economy"` for flights over 8 hours
    - Lie-flat business class for ultra long-haul (10+ hours)
-6. Use `get_flexible_dates_grid` to find off-peak international pricing
-7. Consider `compare_one_way_vs_roundtrip` for open-jaw itineraries
+6. Consider `compare_one_way_vs_roundtrip` for open-jaw itineraries
    - Fly into one city, out from another
 
 **Long-Haul Flight Priorities:**
@@ -1049,132 +1044,6 @@ async def search_airports(
     except Exception as e:
         print(f"MCP Tool Error in search_airports: {e}", file=sys.stderr)
         return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
-
-
-@mcp.tool()
-async def get_flexible_dates_grid(
-    origin: str,
-    destination: str,
-    departure_month: str,
-    return_month: str,
-    adults: int = 1,
-    seat_type: str = "economy",
-    max_results: int = 20
-) -> str:
-    """
-    Get a price grid showing the cheapest round-trip flights across different date combinations.
-    Perfect for flexible travelers who want to find the best prices.
-
-    Args:
-        origin: Origin airport code (e.g., "SFO").
-        destination: Destination airport code (e.g., "JFK").
-        departure_month: Month for departure in YYYY-MM format (e.g., "2025-07").
-        return_month: Month for return in YYYY-MM format (e.g., "2025-07").
-        adults: Number of adult passengers (default: 1).
-        seat_type: Fare class (default: "economy").
-        max_results: Maximum number of cheapest combinations to return (default: 20).
-
-    Example Args:
-        {"origin": "SFO", "destination": "JFK", "departure_month": "2025-07", "return_month": "2025-07"}
-    """
-    print(f"MCP Tool: Getting flexible dates grid {origin}<->{destination} for {departure_month}/{return_month}...", file=sys.stderr)
-    try:
-        # Parse month strings
-        try:
-            dep_year, dep_month = map(int, departure_month.split('-'))
-            ret_year, ret_month = map(int, return_month.split('-'))
-        except ValueError:
-            return json.dumps({"error": {"message": "Invalid month format. Use YYYY-MM (e.g., '2025-07').", "type": "ValueError"}})
-
-        # Generate all dates in the months
-        departure_dates = list(get_date_range(dep_year, dep_month))
-        return_dates = list(get_date_range(ret_year, ret_month))
-
-        if not departure_dates or not return_dates:
-            return json.dumps({"error": {"message": "Invalid month specified.", "type": "ValueError"}})
-
-        # Collect all valid round-trip combinations with prices
-        price_grid = []
-        total_checks = 0
-
-        for dep_date in departure_dates:
-            for ret_date in return_dates:
-                # Only check if return is after departure
-                if ret_date <= dep_date:
-                    continue
-
-                total_checks += 1
-                if total_checks % 20 == 0:
-                    print(f"MCP Tool Progress: Checked {total_checks} date combinations...", file=sys.stderr)
-
-                try:
-                    flight_data = [
-                        FlightData(date=dep_date.strftime('%Y-%m-%d'), from_airport=origin, to_airport=destination),
-                        FlightData(date=ret_date.strftime('%Y-%m-%d'), from_airport=destination, to_airport=origin),
-                    ]
-                    passengers_info = Passengers(adults=adults)
-
-                    result = get_flights(
-                        flight_data=flight_data,
-                        trip="round-trip",
-                        seat=seat_type,
-                        passengers=passengers_info,
-                    )
-
-                    if result and result.flights:
-                        # Get the cheapest flight for this date pair
-                        cheapest = min(result.flights, key=lambda f: parse_price(f.price))
-                        price_int = parse_price(cheapest.price)
-
-                        if price_int != float('inf'):
-                            price_grid.append({
-                                "departure_date": dep_date.strftime('%Y-%m-%d'),
-                                "return_date": ret_date.strftime('%Y-%m-%d'),
-                                "duration_days": (ret_date - dep_date).days,
-                                "price": cheapest.price,
-                                "price_numeric": price_int,
-                                "flight_details": flight_to_dict(cheapest)
-                            })
-
-                except Exception as e:
-                    # Silently continue on individual date pair errors
-                    continue
-
-        # Sort by price and limit results
-        price_grid.sort(key=lambda x: x["price_numeric"])
-        top_results = price_grid[:max_results]
-
-        if top_results:
-            output_data = {
-                "search_parameters": {
-                    "origin": origin,
-                    "destination": destination,
-                    "departure_month": departure_month,
-                    "return_month": return_month,
-                    "adults": adults,
-                    "seat_type": seat_type
-                },
-                "total_combinations_checked": total_checks,
-                "valid_flights_found": len(price_grid),
-                "showing_top": len(top_results),
-                "cheapest_options": top_results
-            }
-            return json.dumps(output_data, indent=2)
-        else:
-            return json.dumps({
-                "message": f"No flights found for {origin} <-> {destination} in the specified months.",
-                "search_parameters": {
-                    "origin": origin,
-                    "destination": destination,
-                    "departure_month": departure_month,
-                    "return_month": return_month
-                },
-                "total_combinations_checked": total_checks
-            })
-
-    except Exception as e:
-        print(f"MCP Tool Error in get_flexible_dates_grid: {e}", file=sys.stderr)
-        return json.dumps({"error": {"message": f"An unexpected error occurred: {str(e)}", "type": type(e).__name__}})
 
 
 @mcp.tool()
