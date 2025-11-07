@@ -23,10 +23,9 @@ Transform how you search for flights with AI assistance. This MCP server integra
 - Compare prices across multiple airports and dates
 - Find the cheapest travel dates automatically
 - Plan complex multi-city itineraries
-- Get flexible date price grids
 - Filter by passengers, cabin class, and preferences
 
-Built on the powerful `fast-flights` library, this server provides 15 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
+Built on the powerful `fast-flights` library, this server provides 14 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
 
 ---
 
@@ -46,7 +45,7 @@ Built on the powerful `fast-flights` library, this server provides 15 specialize
 
 ## Features
 
-### Flight Search Tools (15 Total)
+### Flight Search Tools (14 Total)
 
 #### Core Search Tools
 
@@ -56,7 +55,6 @@ Built on the powerful `fast-flights` library, this server provides 15 specialize
 | `search_round_trip_flights` | Round-trip flights with fixed dates | Standard vacation planning |
 | `search_round_trips_in_date_range` | Flexible date range search | Finding the best deal within a window |
 | `get_multi_city_flights` | Multi-stop itineraries | Complex trips with multiple destinations |
-| `get_flexible_dates_grid` | Price matrix across date combinations | Visualizing price trends |
 | `compare_nearby_airports` | Multi-airport price comparison | Comparing NYC airports (JFK/LGA/EWR) |
 
 #### Specialized Search Tools
@@ -112,56 +110,6 @@ Built on the powerful `fast-flights` library, this server provides 15 specialize
 
 ---
 
-## ⚡ Performance & Reliability
-
-> **Important:** This server uses web scraping which has inherent performance and reliability limitations.
-
-### Tool Reliability Status
-
-| Status | Tool | Speed | Notes |
-|--------|------|-------|-------|
-| ✅ **Reliable** | `search_one_way_flights` | Fast (< 30s) | Most reliable tool, works consistently |
-| ✅ **Reliable** | `search_airports` | Instant | Local search, always works |
-| ✅ **Reliable** | `get_travel_dates` | Instant | Local calculation, always works |
-| ✅ **Reliable** | `generate_google_flights_url` | Instant | Generates URLs, always works |
-| ⚠️ **May Timeout** | `search_round_trip_flights` | Slow (30-60s) | May exceed MCP timeout limits |
-| ⚠️ **May Timeout** | `search_direct_flights` | Slow (30-60s) | Complex queries may timeout |
-| ⚠️ **May Timeout** | `search_flights_by_airline` | Slow (30-60s) | Filtered searches take longer |
-| ⚠️ **May Timeout** | `search_flights_with_max_stops` | Slow (30-60s) | May timeout on some routes |
-| ❌ **Often Timeouts** | `search_round_trips_in_date_range` | Very Slow (60s+) | Multiple searches, high timeout risk |
-| ❌ **Often Timeouts** | `get_flexible_dates_grid` | Very Slow (60s+) | Searches entire month grid |
-| ❌ **Often Timeouts** | `compare_nearby_airports` | Very Slow (60s+) | Searches all airport combinations |
-| ❌ **Often Timeouts** | `get_multi_city_flights` | Very Slow (60s+) | Complex itineraries often fail to scrape |
-| ❌ **Often Timeouts** | `compare_one_way_vs_roundtrip` | Very Slow (60s+) | Makes 3 separate searches |
-| ⚠️ **Depends on Input** | `filter_by_departure_time` | Fast | Works if given valid flight data |
-| ⚠️ **Depends on Input** | `filter_by_max_duration` | Fast | Works if given valid flight data |
-
-### Recommended Usage Pattern
-
-**For Best Results:**
-1. **Use `search_one_way_flights`** for reliable flight data
-2. **For round-trips:** Search two one-way flights separately instead of using `search_round_trip_flights`
-3. **For multi-city:** Use `generate_google_flights_url` to get a clickable link instead of scraping
-4. **When tools timeout:** Check the error response for `google_flights_url` field to view results in browser
-
-**Performance Tips:**
-- Use `return_cheapest_only=true` to speed up searches
-- Narrow date ranges instead of searching entire months
-- Search fewer airports at once in comparison tools
-- Consider using URL generation for complex searches
-
-### Why Scraping is Slow
-
-This server uses Playwright (headless browser) to scrape Google Flights in real-time:
-- Each search launches a browser session
-- Pages must fully load and render
-- Google may rate-limit or block excessive requests
-- MCP has built-in timeout limits (typically 60 seconds)
-
-**Alternative Approach:** For complex searches, use the URL generator tools to create Google Flights links for manual browsing.
-
----
-
 ## Quick Start
 
 ### Prerequisites
@@ -170,6 +118,28 @@ This server uses Playwright (headless browser) to scrape Google Flights in real-
 - An MCP-compatible client (Claude Desktop, Cline, etc.)
 
 ### Installation
+
+#### Option 1: Install from PyPI (Recommended)
+
+The easiest way to use this MCP server is via `uvx` (recommended) or `pip`:
+
+```bash
+# Using uvx (no installation needed, runs in isolated environment)
+uvx mcp-server-google-flights
+
+# Or install globally with pip
+pip install mcp-server-google-flights
+
+# Or install with pipx for isolated global installation
+pipx install mcp-server-google-flights
+```
+
+After installation, you'll need to install Playwright browsers:
+```bash
+playwright install
+```
+
+#### Option 2: Install from Source
 
 ```bash
 # Clone the repository
@@ -180,8 +150,8 @@ cd google-flights-mcp
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install in development mode
+pip install -e .
 
 # Install Playwright browsers (required)
 playwright install
@@ -190,7 +160,11 @@ playwright install
 ### Test the Server
 
 ```bash
-python server.py
+# If installed from PyPI
+mcp-server-google-flights
+
+# If running from source
+python src/mcp_server_google_flights/server.py
 ```
 
 The server uses STDIO transport and will wait for MCP client connections.
@@ -203,12 +177,27 @@ The server uses STDIO transport and will wait for MCP client connections.
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
+#### If installed via PyPI (uvx/pip):
+
+```json
+{
+  "mcpServers": {
+    "google-flights": {
+      "command": "uvx",
+      "args": ["mcp-server-google-flights"]
+    }
+  }
+}
+```
+
+#### If running from source:
+
 ```json
 {
   "mcpServers": {
     "google-flights": {
       "command": "/absolute/path/to/.venv/bin/python",
-      "args": ["/absolute/path/to/google-flights-mcp/server.py"]
+      "args": ["/absolute/path/to/google-flights-mcp/src/mcp_server_google_flights/server.py"]
     }
   }
 }
@@ -218,12 +207,14 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
 Add to `.cline/cline_mcp_settings.json`:
 
+#### If installed via PyPI (uvx/pip):
+
 ```json
 {
   "mcpServers": {
     "google-flights": {
-      "command": "/absolute/path/to/.venv/bin/python",
-      "args": ["/absolute/path/to/google-flights-mcp/server.py"],
+      "command": "uvx",
+      "args": ["mcp-server-google-flights"],
       "disabled": false,
       "autoApprove": []
     }
@@ -231,7 +222,22 @@ Add to `.cline/cline_mcp_settings.json`:
 }
 ```
 
-**Important:** Use absolute paths for both the Python executable and server script.
+#### If running from source:
+
+```json
+{
+  "mcpServers": {
+    "google-flights": {
+      "command": "/absolute/path/to/.venv/bin/python",
+      "args": ["/absolute/path/to/google-flights-mcp/src/mcp_server_google_flights/server.py"],
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+**Important:** When running from source, use absolute paths for both the Python executable and server script.
 
 ### Verify Installation
 
@@ -279,14 +285,6 @@ You: "Compare flight prices from all NYC airports to Miami on December 20, 2026.
 ```
 
 The AI will use `compare_nearby_airports` with JFK, LGA, and EWR.
-
-### Example 5: Flexible Date Grid
-
-```
-You: "Show me a price calendar for Los Angeles to Honolulu in April 2026."
-```
-
-The AI will use `get_flexible_dates_grid` to show prices across different date combinations.
 
 ---
 
@@ -372,23 +370,6 @@ Search complex multi-city itineraries.
 - `return_cheapest_only` (boolean, default: false): Return only cheapest option
 
 **Returns:** Multi-city itinerary options with total prices.
-
----
-
-#### `get_flexible_dates_grid`
-
-Get a price grid showing flight costs across different date combinations.
-
-**Parameters:**
-- `origin` (string, required): Departure airport code
-- `destination` (string, required): Arrival airport code
-- `departure_month` (string, required): Outbound month (YYYY-MM)
-- `return_month` (string, required): Return month (YYYY-MM)
-- `adults` (integer, default: 1): Number of adults
-- `seat_type` (string, default: "economy"): Cabin class
-- `max_results` (integer, default: 50): Maximum results to return
-
-**Returns:** Grid of prices for different date combinations.
 
 ---
 
@@ -653,19 +634,33 @@ playwright install --with-deps
 
 ---
 
-#### Slow Search Performance
+#### Slow Search Performance & Rate Limits
 
-**Problem:** Searches take a long time.
+**Problem:** Searches take a long time or are rejected with rate limit errors.
 
-**Explanation:** The server scrapes Google Flights in real-time, which can be slow, especially for:
-- `search_round_trips_in_date_range` with large date ranges
-- `get_flexible_dates_grid` with full months
-- `compare_nearby_airports` with many airports
+**Explanation:** The server scrapes Google Flights in real-time. Some functions make multiple scraping requests and have hard limits to prevent rate limiting and IP blocking:
+
+**Rate-Limited Functions:**
+- `search_round_trips_in_date_range` - **Maximum 30 date combinations**
+  - Example: 7-day range with 5-7 day stays = ~10-15 requests (OK)
+  - Example: 14-day range with no filters = ~105 requests (REJECTED)
+- `compare_nearby_airports` - **Maximum 12 airport combinations**
+  - Example: 3 origins × 3 destinations = 9 requests (OK)
+  - Example: 4 origins × 4 destinations = 16 requests (REJECTED)
 
 **Solutions:**
-- Use `return_cheapest_only=true` for faster results
-- Narrow date ranges
-- Search fewer airports at once
+- **For date range searches:**
+  - Narrow date ranges (keep under 7-10 days)
+  - Use `min_stay_days` and `max_stay_days` filters
+  - Use `return_cheapest_only=true` for faster results
+  - Split large searches into multiple smaller ones
+
+- **For airport comparisons:**
+  - Limit to 2-3 airports per list
+  - Compare fewer combinations at once
+  - Make multiple smaller comparisons if needed
+
+**Why these limits exist:** Without them, searches with 100+ requests would take 30+ minutes and get your IP blocked by Google.
 
 ---
 
@@ -743,6 +738,28 @@ pytest
 black .
 ruff check .
 ```
+
+### Publishing to PyPI
+
+This package is published to PyPI for easy installation. To publish a new version:
+
+```bash
+# Install build tools
+pip install build twine
+
+# Update version in pyproject.toml and src/mcp_server_google_flights/__init__.py
+
+# Build the package
+python -m build
+
+# Upload to TestPyPI (for testing)
+python -m twine upload --repository testpypi dist/*
+
+# Upload to PyPI (production)
+python -m twine upload dist/*
+```
+
+**Note:** You need PyPI credentials to publish. Contact the maintainer for access.
 
 ---
 
