@@ -1524,6 +1524,9 @@ async def search_flights_by_airline(
         if not airlines_list:
             return json.dumps({"error": {"message": "airlines parameter cannot be empty", "type": "ValueError"}})
 
+        # Debug logging
+        print(f"MCP Tool Debug: airlines_list = {airlines_list}", file=sys.stderr)
+
         # Validate dates
         datetime.datetime.strptime(date, '%Y-%m-%d')
 
@@ -1620,8 +1623,11 @@ async def search_flights_by_airline(
 
         return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
     except Exception as e:
+        import traceback
         error_msg = str(e)
-        print(f"MCP Tool Error in search_flights_by_airline: {error_msg}", file=sys.stderr)
+        error_trace = traceback.format_exc()
+        print(f"MCP Tool Error in search_flights_by_airline: {type(e).__name__}: {error_msg}", file=sys.stderr)
+        print(f"Full traceback:\n{error_trace}", file=sys.stderr)
 
         # Try to extract URL from any exception
         google_flights_url = None
@@ -1631,7 +1637,7 @@ async def search_flights_by_airline(
             if url_match:
                 google_flights_url = url_match.group(1)
 
-        response_data = {"error": {"message": error_msg, "type": type(e).__name__}}
+        response_data = {"error": {"message": f"{type(e).__name__}: {error_msg}", "type": type(e).__name__}}
         if google_flights_url:
             response_data["google_flights_url"] = google_flights_url
         return json.dumps(response_data)
