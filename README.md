@@ -75,7 +75,6 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 
 #### Utility Tools
 
-- **`search_airports`**: Find airport codes by name or location
 - **`get_travel_dates`**: Calculate travel dates relative to today
 - **`generate_google_flights_url`**: Create shareable Google Flights search links
 
@@ -531,17 +530,6 @@ Compare pricing for round-trip ticket vs two one-way tickets.
 
 ### Utility Tools
 
-#### `search_airports`
-
-Search for airports by name, city, or code.
-
-**Parameters:**
-- `query` (string, required): Search term (e.g., "Los Angeles", "LAX", "London")
-
-**Returns:** List of matching airports with codes and names.
-
----
-
 #### `get_travel_dates`
 
 Calculate travel dates relative to today.
@@ -620,7 +608,7 @@ playwright install --with-deps
 #### Flight Search Returns No Results
 
 **Possible causes:**
-- Invalid airport codes (use `search_airports` tool first)
+- Invalid airport codes
 - Dates in the past
 - Invalid date format (must be YYYY-MM-DD)
 - No flights available for that route/date

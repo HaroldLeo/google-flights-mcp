@@ -10,7 +10,6 @@ from typing import Any, Optional, Dict
 # Import fast_flights from pip package
 try:
     from fast_flights import FlightData, Passengers, get_flights
-    from fast_flights import search_airports as search_airports_lib
 except ImportError as e:
     print(f"Error importing fast_flights: {e}", file=sys.stderr)
     print(f"Please install fast_flights: pip install fast-flights", file=sys.stderr)
@@ -98,7 +97,7 @@ def list_all_airports() -> str:
         "airports": airport_list
     }
     if len(airports) > 100:
-        result["note"] = f"Showing first 100 of {len(airports)} airports. Use search_airports tool for specific lookups."
+        result["note"] = f"Showing first 100 of {len(airports)} airports."
 
     return json.dumps(result, indent=2)
 
@@ -117,8 +116,7 @@ def get_airport_by_code(code: str) -> str:
             }, indent=2)
 
     return json.dumps({
-        "error": f"Airport code '{code}' not found",
-        "suggestion": "Use search_airports tool to find available airports"
+        "error": f"Airport code '{code}' not found"
     })
 
 
@@ -130,14 +128,13 @@ def find_best_deal() -> str:
     return """I'll help you find the absolute best flight deal using a comprehensive search strategy.
 
 **Search Strategy:**
-1. First, use `search_airports` to verify origin and destination airport codes
-2. Use `search_round_trips_in_date_range` to search all dates within your flexible window
+1. Use `search_round_trips_in_date_range` to search all dates within your flexible window
    - Set `return_cheapest_only=true` for faster results
    - Try different stay durations (e.g., 3-7 days, 7-14 days)
-3. If you have nearby airports, use `compare_nearby_airports` to check all combinations
+2. If you have nearby airports, use `compare_nearby_airports` to check all combinations
    - Example: NYC has JFK, LGA, EWR; SF Bay has SFO, OAK, SJC
-4. Compare results and identify the cheapest option
-5. Use `generate_google_flights_url` to create a direct booking link
+3. Compare results and identify the cheapest option
+4. Use `generate_google_flights_url` to create a direct booking link
 
 **What I need from you:**
 - Origin city/airport (I'll find nearby alternatives)
@@ -212,17 +209,16 @@ def business_trip() -> str:
     return """I'll help you find the best business travel flights prioritizing convenience and flexibility.
 
 **Business Travel Search Strategy:**
-1. Use `search_airports` to identify all nearby airports for maximum flexibility
-2. Focus on flight times that maximize productivity:
+1. Focus on flight times that maximize productivity:
    - Early morning departures (6-8 AM) to arrive for business hours
    - Evening returns (6-9 PM) to maximize on-site time
    - Avoid red-eyes unless specifically requested
-3. Prioritize direct flights using `search_one_way_flights` or `search_round_trip_flights`
+2. Prioritize direct flights using `search_one_way_flights` or `search_round_trip_flights`
    - Set `return_cheapest_only=false` to see multiple options by time
-4. If dates are flexible, use `search_round_trips_in_date_range` with short windows (2-3 days)
-5. For premium cabins, search with `seat_type="business"` or `seat_type="first"`
-6. Compare nearby airports for better schedules, not just price
-7. Generate booking link with `generate_google_flights_url`
+3. If dates are flexible, use `search_round_trips_in_date_range` with short windows (2-3 days)
+4. For premium cabins, search with `seat_type="business"` or `seat_type="first"`
+5. Compare nearby airports for better schedules, not just price
+6. Generate booking link with `generate_google_flights_url`
 
 **Business Travel Priorities:**
 - Schedule convenience over price (within reason)
@@ -249,17 +245,16 @@ def family_vacation() -> str:
     return """I'll help you find the perfect family-friendly flights for your vacation!
 
 **Family Travel Search Strategy:**
-1. Use `search_airports` to find all convenient airport options for your area
-2. Prioritize `search_direct_flights` to avoid complications with connections and kids
+1. Prioritize `search_direct_flights` to avoid complications with connections and kids
    - Direct flights are especially important with children to minimize travel stress
-3. Filter for reasonable departure times using `filter_by_departure_time`
+2. Filter for reasonable departure times using `filter_by_departure_time`
    - Avoid very early morning (before 8 AM) or late night departures
    - Morning or afternoon flights work best with kids' schedules
-4. Use `search_round_trip_flights` or `search_round_trips_in_date_range` for family dates
+3. Use `search_round_trip_flights` or `search_round_trips_in_date_range` for family dates
    - School breaks, holidays, and summer vacations
-5. Consider `compare_nearby_airports` if you have multiple options
+4. Consider `compare_nearby_airports` if you have multiple options
    - Sometimes a slightly farther airport has better direct flight options
-6. Account for all passengers: adults + children with proper age groups
+5. Account for all passengers: adults + children with proper age groups
 
 **Family-Friendly Flight Priorities:**
 - Direct flights preferred (avoids connection stress with kids)
@@ -331,17 +326,16 @@ def loyalty_program_optimizer() -> str:
     return """I'll help you find flights that maximize your airline loyalty benefits!
 
 **Loyalty Program Search Strategy:**
-1. Use `search_airports` to identify your preferred airlines' hub airports
-2. Use `search_flights_by_airline` with your preferred airlines or alliance
+1. Use `search_flights_by_airline` with your preferred airlines or alliance
    - Star Alliance: `["STAR_ALLIANCE"]` - United, Lufthansa, Air Canada, etc.
    - SkyTeam: `["SKYTEAM"]` - Delta, Air France, KLM, etc.
    - Oneworld: `["ONEWORLD"]` - American, British Airways, Qantas, etc.
    - Specific airlines: `["UA", "AA", "DL"]` for United, American, Delta
-3. Compare alliance options using multiple searches if you have status with multiple programs
-4. Use `search_direct_flights` on your airline for maximum miles/points
+2. Compare alliance options using multiple searches if you have status with multiple programs
+3. Use `search_direct_flights` on your airline for maximum miles/points
    - Direct flights on your airline = full mileage credit
-5. Check `search_round_trip_flights` for award availability patterns
-6. Consider `compare_nearby_airports` to find airline hub airports
+4. Check `search_round_trip_flights` for award availability patterns
+5. Consider `compare_nearby_airports` to find airline hub airports
    - Example: United hub at EWR/IAD/ORD/DEN/SFO
 
 **Loyalty Program Priorities:**
@@ -416,16 +410,15 @@ def long_haul_international() -> str:
     return """I'll help you find the best long-haul international flights prioritizing comfort and value!
 
 **Long-Haul International Search Strategy:**
-1. Use `search_airports` to find all international gateway airports near you
-2. Use `search_round_trip_flights` or `search_round_trips_in_date_range` for your dates
-3. Consider `search_flights_by_airline` for your preferred airlines
+1. Use `search_round_trip_flights` or `search_round_trips_in_date_range` for your dates
+2. Consider `search_flights_by_airline` for your preferred airlines
    - International carriers often have better long-haul comfort
-4. Use `search_direct_flights` for routes over 6+ hours
+3. Use `search_direct_flights` for routes over 6+ hours
    - Direct is worth the premium for very long flights
    - Reduces jet lag and travel time
-5. Compare `seat_type="business"` or `seat_type="premium_economy"` for flights over 8 hours
+4. Compare `seat_type="business"` or `seat_type="premium_economy"` for flights over 8 hours
    - Lie-flat business class for ultra long-haul (10+ hours)
-6. Consider `compare_one_way_vs_roundtrip` for open-jaw itineraries
+5. Consider `compare_one_way_vs_roundtrip` for open-jaw itineraries
    - Fly into one city, out from another
 
 **Long-Haul Flight Priorities:**
@@ -1057,60 +1050,6 @@ async def get_multi_city_flights(
         if google_flights_url:
             response_data["google_flights_url"] = google_flights_url
         return json.dumps(response_data)
-
-
-@mcp.tool()
-async def search_airports(
-    query: str
-) -> str:
-    """
-    Search for airports by name or code. Useful for finding airport codes when planning trips.
-
-    Args:
-        query: Search term (can be airport name, city, or code). Case-insensitive.
-               Examples: "paris", "JFK", "angeles", "heathrow"
-
-    Example Args:
-        {"query": "paris"}
-        {"query": "JFK"}
-        {"query": "angeles"}
-    """
-    print(f"MCP Tool: Searching airports for '{query}'...", file=sys.stderr)
-    try:
-        results = search_airports_lib(query)
-
-        if results:
-            # Convert Airport enum objects to readable format
-            airports_list = []
-            for airport in results[:50]:  # Limit to 50 results to avoid overwhelming output
-                # Airport enum values are typically in format like "JFK" and names like "JFK_New_York"
-                airports_list.append({
-                    "code": airport.value,
-                    "name": airport.name
-                })
-
-            output_data = {
-                "query": query,
-                "results_count": len(airports_list),
-                "total_matches": len(results),
-                "airports": airports_list
-            }
-
-            if len(results) > 50:
-                output_data["note"] = f"Showing first 50 of {len(results)} matches. Refine your search for more specific results."
-
-            return json.dumps(output_data, indent=2)
-        else:
-            return json.dumps({
-                "query": query,
-                "results_count": 0,
-                "message": f"No airports found matching '{query}'",
-                "airports": []
-            })
-
-    except Exception as e:
-        print(f"MCP Tool Error in search_airports: {e}", file=sys.stderr)
-        return json.dumps({"error": {"message": f"An unexpected error occurred.", "type": type(e).__name__}})
 
 
 @mcp.tool()
