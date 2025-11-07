@@ -45,7 +45,7 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 
 ## Features
 
-### Flight Search Tools (14 Total)
+### Flight Search Tools (16 Total)
 
 #### Core Search Tools
 
@@ -64,6 +64,8 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 | `search_direct_flights` | Direct flights only (no stops) | Time-sensitive travel, families with kids |
 | `search_flights_by_airline` | Filter by airline or alliance | Loyalty programs, airline preferences |
 | `search_flights_with_max_stops` | Control maximum number of stops | Balancing price and convenience |
+| `find_cheapest_airline_for_route` | 🆕 Compare prices across specific airlines | Loyalty program comparisons, airline shopping |
+| `check_price_trend` | 🆕 Analyze price tiers across dates | "Should I book now?" decisions |
 
 #### Filter & Analysis Tools
 
@@ -89,6 +91,7 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 - **`find_best_deal`** - Comprehensive search strategy to find the absolute cheapest flights
 - **`weekend_getaway`** - Find the best weekend getaway flights (Fri-Sun or Sat-Mon patterns)
 - **`last_minute_travel`** - Optimized search for urgent travel needs within the next 2 weeks
+- **`reliable_search_strategy`** - 🆕 Guide for choosing fetch modes and troubleshooting
 
 #### Specialized Travel
 - **`business_trip`** - Business travel focused on schedule convenience and direct flights
@@ -105,7 +108,10 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 - **All cabin classes**: Economy, Premium Economy, Business, First
 - **Flexible filtering**: Return only cheapest flights or see all options
 - **Date intelligence**: Search by date ranges, relative dates, or flexible months
-- **Error handling**: Robust error recovery and helpful feedback
+- **Price context indicators**: 🆕 Know if prices are "low", "typical", or "high"
+- **Native airline filtering**: 🆕 Powered by fast-flights 3.0rc0 for reliable results
+- **Multiple fetch modes**: 🆕 Choose reliability vs speed (common/fallback/force-fallback/local/bright-data)
+- **Error handling**: Robust error recovery with helpful suggestions
 
 ---
 
