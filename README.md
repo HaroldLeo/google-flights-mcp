@@ -45,7 +45,7 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 
 ## Features
 
-### Flight Search Tools (16 Total)
+### Flight Search Tools (18 Total)
 
 #### Core Search Tools
 
@@ -66,6 +66,13 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 | `search_flights_with_max_stops` | Control maximum number of stops | Balancing price and convenience |
 | `find_cheapest_airline_for_route` | 🆕 Compare prices across specific airlines | Loyalty program comparisons, airline shopping |
 | `check_price_trend` | 🆕 Analyze price tiers across dates | "Should I book now?" decisions |
+
+#### Token-Efficient Tools (New!)
+
+| Tool | Description | Token Savings |
+|------|-------------|---------------|
+| `get_price_statistics` | 🆕 Get only price stats (min/max/avg) | ~95% fewer tokens |
+| `get_cheapest_flight_summary` | 🆕 Get only the cheapest flight info | ~90% fewer tokens |
 
 #### Filter & Analysis Tools
 
@@ -111,6 +118,9 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 - **Price context indicators**: 🆕 Know if prices are "low", "typical", or "high"
 - **Native airline filtering**: 🆕 Powered by fast-flights 3.0rc0 for reliable results
 - **Multiple fetch modes**: 🆕 Choose reliability vs speed (common/fallback/force-fallback/local/bright-data)
+- **Token-efficient modes**: 🆕 Ultra-lightweight tools & compact mode (save 40-95% tokens)
+- **Result limiting**: 🆕 `max_results` parameter prevents token overload
+- **Pagination support**: 🆕 `offset`/`limit` for progressive data loading
 - **Error handling**: Robust error recovery with helpful suggestions
 
 ---

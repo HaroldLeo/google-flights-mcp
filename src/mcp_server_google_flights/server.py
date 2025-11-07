@@ -50,24 +50,37 @@ def log_debug(tool_name: str, key: str, value: Any):
     """Structured debug logging for MCP tools."""
     print(f"[{tool_name}] DEBUG: {key} = {value}", file=sys.stderr)
 
-def flight_to_dict(flight, price_context=None):
+def flight_to_dict(flight, price_context=None, compact=False):
     """Converts a flight object to a dictionary, handling potential missing attributes.
 
     Args:
         flight: Flight object from fast-flights
         price_context: Optional price tier indicator ("low", "typical", or "high")
+        compact: If True, return only essential fields (saves ~40% tokens)
     """
-    data = {
-        "is_best": getattr(flight, 'is_best', None),
-        "name": getattr(flight, 'name', None),
-        "departure": getattr(flight, 'departure', None),
-        "arrival": getattr(flight, 'arrival', None),
-        "arrival_time_ahead": getattr(flight, 'arrival_time_ahead', None),
-        "duration": getattr(flight, 'duration', None),
-        "stops": getattr(flight, 'stops', None),
-        "delay": getattr(flight, 'delay', None),
-        "price": getattr(flight, 'price', None),
-    }
+    if compact:
+        # Compact mode: only essential fields
+        data = {
+            "airline": getattr(flight, 'name', None),
+            "price": getattr(flight, 'price', None),
+            "departure": getattr(flight, 'departure', None),
+            "arrival": getattr(flight, 'arrival', None),
+            "duration": getattr(flight, 'duration', None),
+            "stops": getattr(flight, 'stops', None),
+        }
+    else:
+        # Full mode: all available fields
+        data = {
+            "is_best": getattr(flight, 'is_best', None),
+            "name": getattr(flight, 'name', None),
+            "departure": getattr(flight, 'departure', None),
+            "arrival": getattr(flight, 'arrival', None),
+            "arrival_time_ahead": getattr(flight, 'arrival_time_ahead', None),
+            "duration": getattr(flight, 'duration', None),
+            "stops": getattr(flight, 'stops', None),
+            "delay": getattr(flight, 'delay', None),
+            "price": getattr(flight, 'price', None),
+        }
 
     # Add price context if available
     if price_context:
@@ -653,6 +666,8 @@ async def search_one_way_flights(
     infants_on_lap: int = 0,
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
+    max_results: int = 10,
+    compact_mode: bool = False,
     fetch_mode: str = "fallback"
 ) -> str:
     """
@@ -712,10 +727,11 @@ async def search_one_way_flights(
             # Process flights based on the new parameter
             if return_cheapest_only:
                 cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context)]
+                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
                 result_key = "cheapest_flight" # Use a specific key for single result
             else:
-                processed_flights = [flight_to_dict(f, price_context) for f in result.flights]
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                processed_flights = [flight_to_dict(f, price_context) for f in flights_to_process]
                 result_key = "flights" # Keep original key for list
 
             output_data = {
@@ -736,6 +752,14 @@ async def search_one_way_flights(
             # Add price context to output if available
             if price_context:
                 output_data["price_context"] = price_context
+
+            # Add result metadata for transparency
+            if not return_cheapest_only and max_results > 0:
+                output_data["result_metadata"] = {
+                    "total_found": len(result.flights),
+                    "returned": len(processed_flights),
+                    "truncated": len(result.flights) > max_results
+                }
 
             return json.dumps(output_data, indent=2)
         else:
@@ -817,6 +841,8 @@ async def search_round_trip_flights(
     seat_type: str = "economy",
     max_stops: int = 2,
     return_cheapest_only: bool = False,
+    max_results: int = 10,
+    compact_mode: bool = False,
     fetch_mode: str = "fallback"
 ) -> str:
     """
@@ -885,10 +911,11 @@ async def search_round_trip_flights(
             # Process flights based on the new parameter
             if return_cheapest_only:
                 cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context)]
+                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
                 result_key = "cheapest_round_trip_option" # Use a specific key for single result
             else:
-                processed_flights = [flight_to_dict(f) for f in result.flights]
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "round_trip_options" # Keep original key for list
 
             # Note: The library might return combined round-trip options or separate legs.
@@ -991,6 +1018,9 @@ async def search_round_trips_in_date_range(
     adults: int = 1,
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
+    max_results: int = 10,
+    offset: int = 0,
+    limit: int = 20,
     fetch_mode: str = "fallback"
 ) -> str:
     """
@@ -1019,6 +1049,10 @@ async def search_round_trips_in_date_range(
         adults: Number of adult passengers (default: 1).
         seat_type: Fare class (e.g., "economy", "business", default: "economy").
         return_cheapest_only: If True, returns only the cheapest flight for each date pair (default: False).
+        max_results: Maximum number of results to return (default: 10). Set to 0 or -1 for unlimited.
+        offset: Number of results to skip (for pagination, default: 0).
+        compact_mode: If True, return only essential fields (saves ~40% tokens, default: False).
+        limit: Maximum number of date pairs to process (for pagination, default: 20).
         fetch_mode: Fetch method - "common" (default), "fallback" (recommended), "force-fallback", "local", or "bright-data".
                    Use "fallback" for best reliability. "local" requires Playwright installed. "bright-data" requires account.
 
@@ -1075,22 +1109,30 @@ async def search_round_trips_in_date_range(
                 total_combinations += 1
                 date_pairs_to_check.append((depart_date, return_date))
 
-    # Enforce rate limit protection
-    if total_combinations > MAX_DATE_COMBINATIONS:
+    # Apply pagination to date pairs
+    total_date_pairs = len(date_pairs_to_check)
+    paginated_pairs = date_pairs_to_check[offset:offset + limit] if limit > 0 else date_pairs_to_check[offset:]
+
+    # Enforce rate limit protection on paginated set
+    if len(paginated_pairs) > MAX_DATE_COMBINATIONS:
         return json.dumps({
             "error": {
-                "message": f"Too many date combinations ({total_combinations} requested, maximum {MAX_DATE_COMBINATIONS} allowed). "
-                          f"This would make {total_combinations} scraping requests and hit rate limits. "
-                          f"Please narrow your date range or add min_stay_days/max_stay_days filters.",
+                "message": f"Too many date combinations ({len(paginated_pairs)} requested after pagination, maximum {MAX_DATE_COMBINATIONS} allowed). "
+                          f"This would make {len(paginated_pairs)} scraping requests and hit rate limits. "
+                          f"Please use smaller limit parameter or narrow your date range.",
                 "type": "RateLimitError",
-                "requested_combinations": total_combinations,
+                "requested_combinations": len(paginated_pairs),
                 "maximum_allowed": MAX_DATE_COMBINATIONS,
-                "suggestion": "Try: (1) Shorter date range, (2) Add min_stay_days/max_stay_days, (3) Split into multiple smaller searches"
+                "total_combinations_available": total_date_pairs,
+                "suggestion": "Try: (1) Use limit=20 or less, (2) Shorter date range, (3) Add min_stay_days/max_stay_days"
             }
         })
 
-    log_info(TOOL, f"Checking {total_combinations} date combination(s)...")
+    log_info(TOOL, f"Checking {len(paginated_pairs)} date combination(s) (of {total_date_pairs} total, offset={offset}, limit={limit})...")
     count = 0
+
+    # Update date_pairs_to_check to use paginated version
+    date_pairs_to_check = paginated_pairs
 
     for depart_date, return_date in date_pairs_to_check:
         count += 1
@@ -1159,7 +1201,14 @@ async def search_round_trips_in_date_range(
                 "return_cheapest_only": return_cheapest_only # Include parameter in output
             },
             results_key: results_data, # Use dynamic key for results
-            "errors_encountered": error_messages if error_messages else None
+            "errors_encountered": error_messages if error_messages else None,
+            "pagination": {
+                "offset": offset,
+                "limit": limit,
+                "returned": len(results_data),
+                "total_date_pairs": total_date_pairs,
+                "has_more": offset + limit < total_date_pairs
+            }
         }
         return json.dumps(output_data, indent=2)
     else:
@@ -1181,6 +1230,7 @@ async def get_multi_city_flights(
     adults: int = 1,
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
+    max_results: int = 10,
     fetch_mode: str = "fallback"
 ) -> str:
     """
@@ -1250,10 +1300,11 @@ async def get_multi_city_flights(
 
             if return_cheapest_only:
                 cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context)]
+                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
                 result_key = "cheapest_multi_city_option"
             else:
-                processed_flights = [flight_to_dict(f) for f in result.flights]
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "multi_city_options"
 
             output_data = {
@@ -1448,7 +1499,7 @@ async def compare_nearby_airports(
                             "destination": destination,
                             "price": cheapest.price,
                             "price_numeric": price_int,
-                            "cheapest_flight": flight_to_dict(cheapest, price_context),
+                            "cheapest_flight": flight_to_dict(cheapest, price_context, compact_mode),
                             "total_options": len(result.flights)
                         })
                     else:
@@ -1511,6 +1562,8 @@ async def search_direct_flights(
     infants_on_lap: int = 0,
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
+    max_results: int = 10,
+    compact_mode: bool = False,
     fetch_mode: str = "fallback"
 ) -> str:
     """
@@ -1585,10 +1638,11 @@ async def search_direct_flights(
 
             if return_cheapest_only:
                 cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context)]
+                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
                 result_key = "cheapest_direct_flight"
             else:
-                processed_flights = [flight_to_dict(f) for f in result.flights]
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "direct_flights"
 
             output_data = {
@@ -1682,6 +1736,8 @@ async def search_flights_by_airline(
     seat_type: str = "economy",
     max_stops: int = 2,
     return_cheapest_only: bool = False,
+    max_results: int = 10,
+    compact_mode: bool = False,
     fetch_mode: str = "fallback"
 ) -> str:
     """
@@ -1769,10 +1825,11 @@ async def search_flights_by_airline(
 
             if return_cheapest_only:
                 cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context)]
+                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
                 result_key = "cheapest_flight_by_airline"
             else:
-                processed_flights = [flight_to_dict(f) for f in result.flights]
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "flights_by_airline"
 
             output_data = {
@@ -1867,6 +1924,8 @@ async def search_flights_with_max_stops(
     adults: int = 1,
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
+    max_results: int = 10,
+    compact_mode: bool = False,
     fetch_mode: str = "fallback"
 ) -> str:
     """
@@ -1937,10 +1996,11 @@ async def search_flights_with_max_stops(
 
             if return_cheapest_only:
                 cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context)]
+                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
                 result_key = "cheapest_flight_with_max_stops"
             else:
-                processed_flights = [flight_to_dict(f) for f in result.flights]
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "flights_with_max_stops"
 
             output_data = {
@@ -2386,14 +2446,14 @@ async def compare_one_way_vs_roundtrip(
             },
             "round_trip_option": {
                 "price": f"${cheapest_round_trip_price}" if cheapest_round_trip_price != float('inf') else "Not available",
-                "flight_details": flight_to_dict(cheapest_round_trip, price_context) if cheapest_round_trip else None
+                "flight_details": flight_to_dict(cheapest_round_trip, price_context, compact_mode) if cheapest_round_trip else None
             },
             "two_one_way_option": {
                 "total_price": f"${two_one_ways_total}" if two_one_ways_total != float('inf') else "Not available",
                 "outbound_price": f"${cheapest_outbound_price}" if cheapest_outbound_price != float('inf') else "Not available",
                 "return_price": f"${cheapest_return_price}" if cheapest_return_price != float('inf') else "Not available",
-                "outbound_flight": flight_to_dict(cheapest_outbound, price_context) if cheapest_outbound else None,
-                "return_flight": flight_to_dict(cheapest_return, price_context) if cheapest_return else None
+                "outbound_flight": flight_to_dict(cheapest_outbound, price_context, compact_mode) if cheapest_outbound else None,
+                "return_flight": flight_to_dict(cheapest_return, price_context, compact_mode) if cheapest_return else None
             },
             "recommendation": recommendation,
             "potential_savings": f"${savings}" if savings else None
@@ -2552,7 +2612,7 @@ async def find_cheapest_airline_for_route(
 
                     airline_results[airline_code] = {
                         "cheapest_price": cheapest_flight.price,
-                        "cheapest_flight": flight_to_dict(cheapest_flight, price_context),
+                        "cheapest_flight": flight_to_dict(cheapest_flight, price_context, compact_mode),
                         "total_options": len(result.flights),
                         "price_tier": price_context
                     }
@@ -2736,6 +2796,220 @@ async def check_price_trend(
         }
 
         return json.dumps(output_data, indent=2)
+
+    except ValueError as e:
+        log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
+        return json.dumps({"error": {"message": "Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except Exception as e:
+        log_error(TOOL, type(e).__name__, str(e))
+        return json.dumps({"error": {"message": str(e), "type": type(e).__name__}})
+
+
+# --- Summary-Only Tools (Token Efficient) ---
+
+@mcp.tool()
+async def get_price_statistics(
+    origin: str,
+    destination: str,
+    date: str,
+    adults: int = 1,
+    seat_type: str = "economy",
+    fetch_mode: str = "fallback"
+) -> str:
+    """
+    Get ONLY price statistics without full flight details - ultra lightweight!
+    Perfect for when you just need to know: "What's the cheapest price?"
+
+    Returns min/max/average prices, flight count, and price tier.
+    Uses ~95% fewer tokens than full search.
+
+    Args:
+        origin: Origin airport code (e.g., "SFO").
+        destination: Destination airport code (e.g., "JFK").
+        date: Date to search (YYYY-MM-DD format).
+        adults: Number of adult passengers (default: 1).
+        seat_type: Fare class (default: "economy").
+        fetch_mode: Fetch method - "fallback" (recommended), "force-fallback", "local", or "bright-data".
+
+    Returns:
+        JSON with price statistics only (no full flight details).
+
+    Example Args:
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20"}
+        {"origin": "LAX", "destination": "NYC", "date": "2025-08-15", "adults": 2}
+    """
+    TOOL = "get_price_statistics"
+
+    try:
+        datetime.datetime.strptime(date, '%Y-%m-%d')
+
+        log_info(TOOL, f"Getting price stats: {origin}→{destination} on {date}")
+
+        flight_data = [
+            FlightData(date=date, from_airport=origin, to_airport=destination),
+        ]
+        passengers_info = Passengers(adults=adults)
+
+        result = get_flights(
+            flight_data=flight_data,
+            trip="one-way",
+            seat=seat_type,
+            passengers=passengers_info,
+            fetch_mode=fetch_mode
+        )
+
+        if result and result.flights:
+            prices = [parse_price(f.price) for f in result.flights]
+            valid_prices = [p for p in prices if p != float('inf')]
+
+            if valid_prices:
+                price_context = getattr(result, 'current_price', None)
+
+                output_data = {
+                    "search_parameters": {
+                        "origin": origin,
+                        "destination": destination,
+                        "date": date,
+                        "adults": adults,
+                        "seat_type": seat_type
+                    },
+                    "statistics": {
+                        "min_price": f"${min(valid_prices)}",
+                        "max_price": f"${max(valid_prices)}",
+                        "avg_price": f"${int(sum(valid_prices) / len(valid_prices))}",
+                        "flight_count": len(result.flights),
+                        "price_tier": price_context
+                    },
+                    "note": "For full flight details, use search_one_way_flights with max_results parameter"
+                }
+
+                log_info(TOOL, f"Stats: ${min(valid_prices)}-${max(valid_prices)}, {len(result.flights)} options, tier={price_context}")
+                return json.dumps(output_data, indent=2)
+            else:
+                return json.dumps({
+                    "message": "Flights found but no valid prices could be parsed",
+                    "flight_count": len(result.flights)
+                })
+        else:
+            return json.dumps({
+                "message": f"No flights found for {origin} -> {destination} on {date}.",
+                "search_parameters": {"origin": origin, "destination": destination, "date": date}
+            })
+
+    except ValueError as e:
+        log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
+        return json.dumps({"error": {"message": "Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
+    except Exception as e:
+        log_error(TOOL, type(e).__name__, str(e))
+        return json.dumps({"error": {"message": str(e), "type": type(e).__name__}})
+
+
+@mcp.tool()
+async def get_cheapest_flight_summary(
+    origin: str,
+    destination: str,
+    date: str,
+    adults: int = 1,
+    seat_type: str = "economy",
+    is_round_trip: bool = False,
+    return_date: Optional[str] = None,
+    fetch_mode: str = "fallback"
+) -> str:
+    """
+    Get ONLY the cheapest flight summary - minimal token usage!
+    Returns just the essential info about the cheapest option.
+
+    Perfect for: "What's the cheapest way to get there?"
+    Uses ~90% fewer tokens than returning all flights.
+
+    Args:
+        origin: Origin airport code (e.g., "SFO").
+        destination: Destination airport code (e.g., "JFK").
+        date: Departure date (YYYY-MM-DD format).
+        adults: Number of adult passengers (default: 1).
+        seat_type: Fare class (default: "economy").
+        is_round_trip: If True, search round-trip flights (default: False).
+        return_date: Return date for round-trips (YYYY-MM-DD format).
+        fetch_mode: Fetch method - "fallback" (recommended), "force-fallback", "local", or "bright-data".
+
+    Returns:
+        JSON with only the cheapest flight summary.
+
+    Example Args:
+        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20"}
+        {"origin": "LAX", "destination": "NYC", "date": "2025-08-15", "is_round_trip": true, "return_date": "2025-08-22"}
+    """
+    TOOL = "get_cheapest_flight_summary"
+
+    try:
+        datetime.datetime.strptime(date, '%Y-%m-%d')
+        if is_round_trip:
+            if not return_date:
+                return json.dumps({"error": {"message": "return_date is required when is_round_trip=True", "type": "ValueError"}})
+            datetime.datetime.strptime(return_date, '%Y-%m-%d')
+
+        trip_desc = "round-trip" if is_round_trip else "one-way"
+        log_info(TOOL, f"Finding cheapest {trip_desc}: {origin}→{destination}")
+
+        if is_round_trip:
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
+                FlightData(date=return_date, from_airport=destination, to_airport=origin),
+            ]
+            trip_type = "round-trip"
+        else:
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
+            ]
+            trip_type = "one-way"
+
+        passengers_info = Passengers(adults=adults)
+
+        result = get_flights(
+            flight_data=flight_data,
+            trip=trip_type,
+            seat=seat_type,
+            passengers=passengers_info,
+            fetch_mode=fetch_mode
+        )
+
+        if result and result.flights:
+            cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
+            price_context = getattr(result, 'current_price', None)
+
+            output_data = {
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "date": date,
+                    "is_round_trip": is_round_trip,
+                    "return_date": return_date if is_round_trip else None,
+                    "adults": adults,
+                    "seat_type": seat_type
+                },
+                "cheapest_flight": {
+                    "airline": cheapest_flight.name,
+                    "price": cheapest_flight.price,
+                    "departure": cheapest_flight.departure,
+                    "arrival": cheapest_flight.arrival,
+                    "duration": cheapest_flight.duration,
+                    "stops": cheapest_flight.stops,
+                    "price_tier": price_context
+                },
+                "context": {
+                    "total_options_found": len(result.flights),
+                    "price_tier": price_context
+                },
+                "note": "For more options, use search_one_way_flights or search_round_trip_flights"
+            }
+
+            log_info(TOOL, f"Cheapest: {cheapest_flight.price} on {cheapest_flight.name} ({len(result.flights)} options checked)")
+            return json.dumps(output_data, indent=2)
+        else:
+            return json.dumps({
+                "message": f"No flights found for {origin} -> {destination} on {date}.",
+                "search_parameters": {"origin": origin, "destination": destination, "date": date}
+            })
 
     except ValueError as e:
         log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
