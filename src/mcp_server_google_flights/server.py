@@ -50,46 +50,183 @@ def log_debug(tool_name: str, key: str, value: Any):
     """Structured debug logging for MCP tools."""
     print(f"[{tool_name}] DEBUG: {key} = {value}", file=sys.stderr)
 
-def flight_to_dict(flight, compact=False):
-    """Converts a flight object to a dictionary, handling potential missing attributes.
+def format_datetime(simple_datetime):
+    """Convert SimpleDatetime object to ISO format string.
 
     Args:
-        flight: Flight object from fast-flights
-        compact: If True, return only essential fields (saves ~40% tokens)
-    """
-    if compact:
-        # Compact mode: only essential fields
-        data = {
-            "airline": getattr(flight, 'name', None),
-            "price": getattr(flight, 'price', None),
-            "departure": getattr(flight, 'departure', None),
-            "arrival": getattr(flight, 'arrival', None),
-            "duration": getattr(flight, 'duration', None),
-            "stops": getattr(flight, 'stops', None),
-        }
-    else:
-        # Full mode: all available fields
-        data = {
-            "is_best": getattr(flight, 'is_best', None),
-            "name": getattr(flight, 'name', None),
-            "departure": getattr(flight, 'departure', None),
-            "arrival": getattr(flight, 'arrival', None),
-            "arrival_time_ahead": getattr(flight, 'arrival_time_ahead', None),
-            "duration": getattr(flight, 'duration', None),
-            "stops": getattr(flight, 'stops', None),
-            "delay": getattr(flight, 'delay', None),
-            "price": getattr(flight, 'price', None),
-        }
-    return data
+        simple_datetime: SimpleDatetime object with date tuple (year, month, day) and time tuple (hour, minute)
 
-def parse_price(price_str):
-    """Extracts integer price from a string like '$268'."""
-    if not price_str or not isinstance(price_str, str):
-        return float('inf') # Return infinity if price is missing or invalid
+    Returns:
+        ISO formatted datetime string (YYYY-MM-DD HH:MM)
+    """
+    if not simple_datetime:
+        return None
     try:
-        return int(price_str.replace('$', '').replace(',', ''))
-    except ValueError:
-        return float('inf') # Return infinity if conversion fails
+        year, month, day = simple_datetime.date
+        hour, minute = simple_datetime.time
+        return f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}"
+    except (AttributeError, ValueError, TypeError):
+        return str(simple_datetime)
+
+def format_duration(minutes):
+    """Convert duration in minutes to human-readable format.
+
+    Args:
+        minutes: Duration in minutes (int)
+
+    Returns:
+        Formatted duration string (e.g., "2h 30m")
+    """
+    if not isinstance(minutes, int):
+        return str(minutes)
+    hours = minutes // 60
+    mins = minutes % 60
+    if hours > 0 and mins > 0:
+        return f"{hours}h {mins}m"
+    elif hours > 0:
+        return f"{hours}h"
+    else:
+        return f"{mins}m"
+
+def flight_to_dict(flight, compact=False):
+    """Converts a Flights object to a dictionary with detailed flight information.
+
+    Args:
+        flight: Flights object from fast-flights 3.0rc0
+        compact: If True, return only essential fields (saves ~40% tokens)
+
+    The Flights object structure (fast-flights 3.0rc0):
+        - type: str - Type of flight
+        - price: int - Total price
+        - airlines: list[str] - List of airline names
+        - flights: list[SingleFlight] - List of flight segments
+        - carbon: CarbonEmission - Carbon emission data
+
+    Each SingleFlight has:
+        - from_airport: Airport (name, code)
+        - to_airport: Airport (name, code)
+        - departure: SimpleDatetime (date tuple, time tuple)
+        - arrival: SimpleDatetime (date tuple, time tuple)
+        - duration: int (minutes)
+        - plane_type: str
+    """
+    try:
+        # Extract basic info
+        price = getattr(flight, 'price', None)
+        airlines = getattr(flight, 'airlines', [])
+        airline_names = ', '.join(airlines) if airlines else None
+        flight_segments = getattr(flight, 'flights', [])
+        flight_type = getattr(flight, 'type', None)
+
+        # Calculate stops (number of segments - 1)
+        num_stops = len(flight_segments) - 1 if flight_segments else 0
+
+        # Get overall departure and arrival from first and last segments
+        overall_departure = None
+        overall_arrival = None
+        total_duration_minutes = 0
+
+        if flight_segments:
+            first_segment = flight_segments[0]
+            last_segment = flight_segments[-1]
+
+            overall_departure = format_datetime(getattr(first_segment, 'departure', None))
+            overall_arrival = format_datetime(getattr(last_segment, 'arrival', None))
+
+            # Sum up all segment durations
+            for segment in flight_segments:
+                duration = getattr(segment, 'duration', 0)
+                if isinstance(duration, int):
+                    total_duration_minutes += duration
+
+        total_duration = format_duration(total_duration_minutes) if total_duration_minutes > 0 else None
+
+        # Get carbon emission data
+        carbon_data = getattr(flight, 'carbon', None)
+        carbon_emission = None
+        if carbon_data:
+            emission = getattr(carbon_data, 'emission', None)
+            typical = getattr(carbon_data, 'typical_on_route', None)
+            if emission is not None:
+                carbon_emission = {
+                    "emission_grams": emission,
+                    "typical_on_route_grams": typical
+                }
+
+        if compact:
+            # Compact mode: only essential fields
+            return {
+                "price": price,
+                "airlines": airline_names,
+                "departure_time": overall_departure,
+                "arrival_time": overall_arrival,
+                "duration": total_duration,
+                "stops": num_stops,
+            }
+        else:
+            # Full mode: detailed information
+            # Build detailed segment information
+            segments = []
+            for i, segment in enumerate(flight_segments):
+                from_airport = getattr(segment, 'from_airport', None)
+                to_airport = getattr(segment, 'to_airport', None)
+
+                segment_info = {
+                    "segment_number": i + 1,
+                    "from": {
+                        "airport_code": getattr(from_airport, 'code', None),
+                        "airport_name": getattr(from_airport, 'name', None),
+                    } if from_airport else None,
+                    "to": {
+                        "airport_code": getattr(to_airport, 'code', None),
+                        "airport_name": getattr(to_airport, 'name', None),
+                    } if to_airport else None,
+                    "departure": format_datetime(getattr(segment, 'departure', None)),
+                    "arrival": format_datetime(getattr(segment, 'arrival', None)),
+                    "duration": format_duration(getattr(segment, 'duration', 0)),
+                    "plane_type": getattr(segment, 'plane_type', None),
+                }
+                segments.append(segment_info)
+
+            return {
+                "price": price,
+                "airlines": airline_names,
+                "flight_type": flight_type,
+                "departure_time": overall_departure,
+                "arrival_time": overall_arrival,
+                "total_duration": total_duration,
+                "stops": num_stops,
+                "segments": segments,
+                "carbon_emissions": carbon_emission,
+            }
+
+    except Exception as e:
+        # Fallback: return whatever we can extract
+        log_error("flight_to_dict", type(e).__name__, f"Error converting flight: {str(e)}")
+        return {
+            "error": f"Failed to parse flight data: {str(e)}",
+            "raw_data": str(flight)
+        }
+
+def parse_price(price):
+    """Extracts integer price from a price value.
+
+    Args:
+        price: Price value (can be int, string like '$268', or None)
+
+    Returns:
+        Integer price or float('inf') if invalid
+    """
+    if price is None:
+        return float('inf')
+    if isinstance(price, int):
+        return price
+    if isinstance(price, str):
+        try:
+            return int(price.replace('$', '').replace(',', ''))
+        except ValueError:
+            return float('inf')
+    return float('inf')
 
 def get_date_range(year, month):
     """Generates all dates within a given month."""
