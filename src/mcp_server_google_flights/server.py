@@ -1882,8 +1882,100 @@ async def get_multi_city_flights(
         # This is a known limitation - multi-city is not fully supported by the library
         error_msg = str(e)
         log_error(TOOL, "IndexError", f"Multi-city parsing failed: {error_msg}")
-        log_info(TOOL, "Multi-city scraping not fully supported by fast-flights library")
+        log_info(TOOL, "Attempting fallback: searching each segment individually")
 
+        # FALLBACK: Try searching each segment as a separate one-way flight
+        try:
+            segment_results = []
+            all_segments_successful = True
+
+            for i, segment in enumerate(segments):
+                try:
+                    log_info(TOOL, f"Searching segment {i+1}/{len(segments)}: {segment['from']}→{segment['to']} on {segment['date']}")
+
+                    # Create query for this individual segment
+                    segment_flight = [FlightQuery(
+                        date=segment["date"],
+                        from_airport=segment["from"],
+                        to_airport=segment["to"]
+                    )]
+                    passengers_info = Passengers(adults=adults)
+
+                    segment_query = create_query(
+                        flights=segment_flight,
+                        trip="one-way",
+                        seat=seat_type,
+                        passengers=passengers_info
+                    )
+
+                    segment_url = f"https://www.google.com/travel/flights?tfs={segment_query}&hl=&curr="
+                    segment_flights = get_flights(segment_query)
+
+                    if segment_flights:
+                        log_info(TOOL, f"Found {len(segment_flights)} flight(s) for segment {i+1}")
+
+                        # Process based on return_cheapest_only
+                        if return_cheapest_only:
+                            cheapest = min(segment_flights, key=lambda f: parse_price(f.price))
+                            processed = [flight_to_dict(cheapest, compact_mode=compact_mode)]
+                        else:
+                            flights_to_process = segment_flights[:max_results] if max_results > 0 else segment_flights
+                            processed = [flight_to_dict(f, compact_mode=compact_mode) for f in flights_to_process]
+
+                        segment_results.append({
+                            "segment_number": i + 1,
+                            "route": f"{segment['from']} → {segment['to']}",
+                            "date": segment["date"],
+                            "flights": processed,
+                            "booking_url": segment_url
+                        })
+                    else:
+                        log_info(TOOL, f"No flights found for segment {i+1}")
+                        segment_results.append({
+                            "segment_number": i + 1,
+                            "route": f"{segment['from']} → {segment['to']}",
+                            "date": segment["date"],
+                            "message": "No flights found for this segment",
+                            "booking_url": segment_url
+                        })
+                        all_segments_successful = False
+
+                except Exception as seg_error:
+                    log_error(TOOL, type(seg_error).__name__, f"Segment {i+1} search failed: {str(seg_error)}")
+                    segment_results.append({
+                        "segment_number": i + 1,
+                        "route": f"{segment['from']} → {segment['to']}",
+                        "date": segment["date"],
+                        "error": str(seg_error)
+                    })
+                    all_segments_successful = False
+
+            # If we got at least some results, return them
+            if segment_results:
+                log_info(TOOL, f"Fallback successful: retrieved {len(segment_results)} segment(s)")
+
+                response_data = {
+                    "message": "Multi-city search was split into individual one-way segments",
+                    "note": "Since multi-city parsing is not supported, each leg of your journey was searched separately. You can book these flights individually or use the combined URL below to view all segments together on Google Flights.",
+                    "search_parameters": {
+                        "segments": segments,
+                        "adults": adults,
+                        "seat_type": seat_type
+                    },
+                    "segments": segment_results,
+                    "combined_booking_url": google_flights_url
+                }
+
+                if not all_segments_successful:
+                    response_data["warning"] = "Some segments could not be retrieved. Check individual segment details above."
+
+                return json.dumps(response_data, indent=2)
+
+        except Exception as fallback_error:
+            log_error(TOOL, type(fallback_error).__name__, f"Fallback also failed: {str(fallback_error)}")
+
+        # If fallback also failed, return the original error response
+        log_info(TOOL, "Multi-city scraping not fully supported by fast-flights library")
         response_data = {
             "message": "Multi-city flight scraping is not fully supported by the underlying library.",
             "google_flights_url": google_flights_url,
