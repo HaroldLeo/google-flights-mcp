@@ -114,9 +114,40 @@ When using this MCP server:
 
 ---
 
+## Playwright Fallback Discovery
+
+**Update**: The package DOES have Playwright fallback support... but not in the PyPI version we're using!
+
+### What Happened
+- **PyPI `3.0rc0`** (installed): Only has `integration` parameter with BrightData support
+- **GitHub main branch**: Has full Playwright fallback with `fetch_mode` parameter:
+  - `"common"` - Standard HTTP (current behavior)
+  - `"fallback"` - Try HTTP, then Playwright on failure
+  - `"force-fallback"` - Force Playwright
+  - `"local"` - Local Playwright
+
+### Why We Don't Have It
+The `3.0rc0` on PyPI appears to be an early release candidate. The GitHub repo has been updated (Aug 2025) with Playwright fallback features that haven't been released to PyPI yet.
+
+### Options
+1. **Install from GitHub**: `pip install git+https://github.com/AWeirdDev/flights.git`
+   - Gets Playwright fallback
+   - May be less stable
+2. **Stay with 3.0rc0**: Current approach
+   - Stable release candidate
+   - Works with primp (browser impersonation)
+   - Missing Playwright fallback
+
+**Note**: Even with Playwright fallback, flight numbers and best_flights would still be unavailable - those are parser limitations, not fetching issues.
+
+See `PLAYWRIGHT_FALLBACK_ANALYSIS.md` for detailed analysis.
+
+---
+
 ## Future Improvements
 
 1. **Flight Numbers & Best Flights**: Consider forking fast-flights or creating a custom parser to extract these fields
 2. **Additional Metadata**: Investigate what other useful data is available in the raw Google Flights response
-3. **Library Updates**: Monitor fast-flights for updates that may include these fields
-4. **Alternative APIs**: Consider using Google's official Flight Search API if more detailed data is needed
+3. **Library Updates**: Monitor fast-flights for official 3.0 release with Playwright support
+4. **Playwright Fallback**: Consider upgrading to GitHub version if encountering scraping blocks
+5. **Alternative APIs**: Consider using Google's official Flight Search API if more detailed data is needed
