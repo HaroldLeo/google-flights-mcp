@@ -50,12 +50,11 @@ def log_debug(tool_name: str, key: str, value: Any):
     """Structured debug logging for MCP tools."""
     print(f"[{tool_name}] DEBUG: {key} = {value}", file=sys.stderr)
 
-def flight_to_dict(flight, price_context=None, compact=False):
+def flight_to_dict(flight, compact=False):
     """Converts a flight object to a dictionary, handling potential missing attributes.
 
     Args:
         flight: Flight object from fast-flights
-        price_context: Optional price tier indicator ("low", "typical", or "high")
         compact: If True, return only essential fields (saves ~40% tokens)
     """
     if compact:
@@ -81,11 +80,6 @@ def flight_to_dict(flight, price_context=None, compact=False):
             "delay": getattr(flight, 'delay', None),
             "price": getattr(flight, 'price', None),
         }
-
-    # Add price context if available
-    if price_context:
-        data["price_tier"] = price_context
-
     return data
 
 def parse_price(price_str):
@@ -684,20 +678,17 @@ async def search_one_way_flights(
         )
         result = get_flights(query)
 
-        if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
-            price_context = getattr(result, 'current_price', None)
-
-            price_context = getattr(result, 'current_price', None)
+        if result:
+            log_info(TOOL, f"Found {len(result)} flight(s)")
 
             # Process flights based on the new parameter
             if return_cheapest_only:
-                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
+                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
                 result_key = "cheapest_flight" # Use a specific key for single result
             else:
-                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
-                processed_flights = [flight_to_dict(f, price_context) for f in flights_to_process]
+                flights_to_process = result[:max_results] if max_results > 0 else result
+                processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "flights" # Keep original key for list
 
             output_data = {
@@ -714,17 +705,12 @@ async def search_one_way_flights(
                 },
                 result_key: processed_flights
             }
-
-            # Add price context to output if available
-            if price_context:
-                output_data["price_context"] = price_context
-
             # Add result metadata for transparency
             if not return_cheapest_only and max_results > 0:
                 output_data["result_metadata"] = {
-                    "total_found": len(result.flights),
+                    "total_found": len(result),
                     "returned": len(processed_flights),
-                    "truncated": len(result.flights) > max_results
+                    "truncated": len(result) > max_results
                 }
 
             return json.dumps(output_data, indent=2)
@@ -867,17 +853,15 @@ async def search_round_trip_flights(
         )
         result = get_flights(query)
 
-        if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} round-trip option(s)")
-            price_context = getattr(result, 'current_price', None)
-
+        if result:
+            log_info(TOOL, f"Found {len(result)} round-trip option(s)")
             # Process flights based on the new parameter
             if return_cheapest_only:
-                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
+                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
                 result_key = "cheapest_round_trip_option" # Use a specific key for single result
             else:
-                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                flights_to_process = result[:max_results] if max_results > 0 else result
                 processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "round_trip_options" # Keep original key for list
 
@@ -1110,10 +1094,10 @@ async def search_round_trips_in_date_range(
             result = get_flights(query)
 
             # Collect results based on mode
-            if result and result.flights:
+            if result:
                 if return_cheapest_only:
                     # Find and store only the cheapest for this pair
-                    cheapest_flight_for_pair = min(result.flights, key=lambda f: parse_price(f.price))
+                    cheapest_flight_for_pair = min(result, key=lambda f: parse_price(f.price))
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
@@ -1121,7 +1105,7 @@ async def search_round_trips_in_date_range(
                     })
                 else:
                     # Store all flights for this pair
-                    flights_list = [flight_to_dict(f) for f in result.flights]
+                    flights_list = [flight_to_dict(f) for f in result]
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
@@ -1248,16 +1232,14 @@ async def get_multi_city_flights(
         )
         result = get_flights(query)
 
-        if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} multi-city option(s)")
-            price_context = getattr(result, 'current_price', None)
-
+        if result:
+            log_info(TOOL, f"Found {len(result)} multi-city option(s)")
             if return_cheapest_only:
-                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
+                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
                 result_key = "cheapest_multi_city_option"
             else:
-                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                flights_to_process = result[:max_results] if max_results > 0 else result
                 processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "multi_city_options"
 
@@ -1408,16 +1390,14 @@ async def search_direct_flights(
         )
         result = get_flights(query)
 
-        if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} direct flight(s)")
-            price_context = getattr(result, 'current_price', None)
-
+        if result:
+            log_info(TOOL, f"Found {len(result)} direct flight(s)")
             if return_cheapest_only:
-                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
+                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
                 result_key = "cheapest_direct_flight"
             else:
-                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                flights_to_process = result[:max_results] if max_results > 0 else result
                 processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "direct_flights"
 
@@ -1592,16 +1572,14 @@ async def search_flights_by_airline(
         )
         result = get_flights(query)
 
-        if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
-            price_context = getattr(result, 'current_price', None)
-
+        if result:
+            log_info(TOOL, f"Found {len(result)} flight(s)")
             if return_cheapest_only:
-                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
+                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
                 result_key = "cheapest_flight_by_airline"
             else:
-                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                flights_to_process = result[:max_results] if max_results > 0 else result
                 processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "flights_by_airline"
 
@@ -1760,16 +1738,14 @@ async def search_flights_with_max_stops(
         )
         result = get_flights(query)
 
-        if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
-            price_context = getattr(result, 'current_price', None)
-
+        if result:
+            log_info(TOOL, f"Found {len(result)} flight(s)")
             if return_cheapest_only:
-                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, price_context, compact_mode)]
+                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
                 result_key = "cheapest_flight_with_max_stops"
             else:
-                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                flights_to_process = result[:max_results] if max_results > 0 else result
                 processed_flights = [flight_to_dict(f) for f in flights_to_process]
                 result_key = "flights_with_max_stops"
 
