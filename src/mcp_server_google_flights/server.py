@@ -1101,6 +1101,7 @@ async def search_round_trips_in_date_range(
     max_stay_days: Optional[int] = None,
     adults: int = 1,
     seat_type: str = "economy",
+    max_stops: int = 2,
     return_cheapest_only: bool = False,
     max_results: int = 10,
     offset: int = 0,
@@ -1131,6 +1132,7 @@ async def search_round_trips_in_date_range(
         max_stay_days: Maximum number of days for the stay (optional).
         adults: Number of adult passengers (default: 1).
         seat_type: Fare class (e.g., "economy", "business", default: "economy").
+        max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
         return_cheapest_only: If True, returns only the cheapest flight for each date pair (default: False).
         max_results: Maximum number of results to return (default: 10). Set to 0 or -1 for unlimited.
         offset: Number of results to skip (for pagination, default: 0).
@@ -1227,7 +1229,7 @@ async def search_round_trips_in_date_range(
             ]
             passengers_info = Passengers(adults=adults)
 
-            query = create_query(flights=flights, trip="round-trip", seat=seat_type, passengers=passengers_info)
+            query = create_query(flights=flights, trip="round-trip", seat=seat_type, passengers=passengers_info, max_stops=max_stops)
             result = get_flights(query)
 
             # Collect results based on mode
@@ -1274,6 +1276,7 @@ async def search_round_trips_in_date_range(
                 "max_stay_days": max_stay_days,
                 "adults": adults,
                 "seat_type": seat_type,
+                "max_stops": max_stops,
                 "return_cheapest_only": return_cheapest_only # Include parameter in output
             },
             results_key: results_data, # Use dynamic key for results
@@ -1294,7 +1297,7 @@ async def search_round_trips_in_date_range(
             "message": f"No flights found and no errors encountered for {origin} -> {destination} in the range {start_date_str} to {end_date_str}.",
             "search_parameters": {
                  "origin": origin, "destination": destination, "start_date": start_date_str, "end_date": end_date_str,
-                 "min_stay_days": min_stay_days, "max_stay_days": max_stay_days, "adults": adults, "seat_type": seat_type
+                 "min_stay_days": min_stay_days, "max_stay_days": max_stay_days, "adults": adults, "seat_type": seat_type, "max_stops": max_stops
             },
             "errors_encountered": error_messages if error_messages else None
         })
