@@ -1312,6 +1312,11 @@ async def get_multi_city_flights(
     """
     Fetches multi-city/multi-stop itineraries for complex trip planning.
 
+    ⚠️  IMPORTANT: Multi-city flight scraping is not fully supported by the underlying fast-flights
+    library. This function will generate a valid Google Flights URL with your search parameters,
+    but may not be able to parse the results. If parsing fails, you'll receive a direct link to
+    view the flights on Google Flights.
+
     Args:
         flight_segments: JSON string of flight segments. Each segment should have "date", "from", and "to" fields.
                         Example: '[{"date": "2025-07-01", "from": "SFO", "to": "NYC"}, {"date": "2025-07-05", "from": "NYC", "to": "MIA"}, {"date": "2025-07-10", "from": "MIA", "to": "SFO"}]'
@@ -1368,6 +1373,10 @@ async def get_multi_city_flights(
             seat=seat_type,
             passengers=passengers_info
         )
+
+        # Extract URL for fallback (multi-city parsing often fails in fast-flights)
+        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
+
         result = get_flights(query)
 
         if result:
@@ -1419,33 +1428,46 @@ async def get_multi_city_flights(
             response_data = {
                 "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
                 "search_parameters": {"segments": segments, "adults": adults, "seat_type": seat_type},
-                "note": "Multi-city searches may not return results via scraping. Click the URL below to view flights in your browser."
+                "note": "Multi-city searches may not return results via scraping. Click the URL below to view flights in your browser.",
+                "google_flights_url": google_flights_url
             }
-            if google_flights_url:
-                response_data["google_flights_url"] = google_flights_url
             return json.dumps(response_data)
 
-        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
+        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}, "google_flights_url": google_flights_url})
+    except IndexError as e:
+        # IndexError occurs when fast-flights can't parse multi-city results
+        # This is a known limitation - multi-city is not fully supported by the library
+        error_msg = str(e)
+        log_error(TOOL, "IndexError", f"Multi-city parsing failed: {error_msg}")
+        log_info(TOOL, "Multi-city scraping not fully supported by fast-flights library")
+
+        response_data = {
+            "message": "Multi-city flight scraping is not fully supported by the underlying library.",
+            "google_flights_url": google_flights_url,
+            "search_parameters": {
+                "segments": segments,
+                "adults": adults,
+                "seat_type": seat_type
+            },
+            "note": "Please click the URL above to view multi-city flights directly on Google Flights. The URL has been generated with your search parameters.",
+            "technical_details": {
+                "error_type": "IndexError",
+                "reason": "The fast-flights library can generate multi-city search URLs but cannot parse the results due to differences in page structure."
+            }
+        }
+        return json.dumps(response_data, indent=2)
     except Exception as e:
         import traceback
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
         log_debug(TOOL, "traceback", traceback.format_exc())
 
-        # Try to extract URL from any exception
-        google_flights_url = None
-        if "https://www.google.com/travel/flights" in error_msg:
-            import re
-            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
-            if url_match:
-                google_flights_url = url_match.group(1)
-
+        # URL already extracted earlier - use it
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
-            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly."
+            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly.",
+            "google_flights_url": google_flights_url
         }
-        if google_flights_url:
-            response_data["google_flights_url"] = google_flights_url
         return json.dumps(response_data)
 
 @mcp.tool()
