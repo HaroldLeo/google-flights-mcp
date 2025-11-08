@@ -252,7 +252,7 @@ This server includes automatic fallback to [SerpApi](https://serpapi.com) when t
 
 1. **Get a SerpApi API Key**
    - Sign up at [https://serpapi.com](https://serpapi.com)
-   - Free tier: 100 searches/month
+   - Free tier: 250 searches/month
    - Paid plans available for higher volume
 
 2. **Configure the API Key in MCP**
