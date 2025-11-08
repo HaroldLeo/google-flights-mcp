@@ -97,6 +97,7 @@ Built on the powerful `fast-flights` library, this server provides 10 specialize
 - **All cabin classes**: Economy, Premium Economy, Business, First
 - **Flexible filtering**: Return only cheapest flights or see all options
 - **Date intelligence**: Search by date ranges, relative dates, or flexible months
+- **SerpApi Fallback**: 🆕 Automatic fallback to SerpApi when scraping fails (optional, requires API key)
 - **Price context indicators**: 🆕 Know if prices are "low", "typical", or "high"
 - **Native airline filtering**: 🆕 Powered by fast-flights 3.0rc0 for reliable results
 - **Multiple fetch modes**: 🆕 Choose reliability vs speed (common/fallback/force-fallback/local/bright-data)
@@ -235,6 +236,81 @@ Add to `.cline/cline_mcp_settings.json`:
 ```
 
 **Important:** When running from source, use absolute paths for both the Python executable and server script.
+
+### Optional: SerpApi Fallback Configuration
+
+This server includes automatic fallback to [SerpApi](https://serpapi.com) when the primary scraping method fails. This significantly improves reliability and success rates for flight searches.
+
+#### Benefits of SerpApi Fallback
+
+- **Higher Success Rate**: API-based access is more reliable than web scraping
+- **Better Rate Limiting**: Avoids Google's anti-scraping restrictions
+- **Automatic Activation**: Only used when fast-flights fails
+- **Transparent**: Results clearly indicate when fallback was used
+
+#### Setup Instructions
+
+1. **Get a SerpApi API Key**
+   - Sign up at [https://serpapi.com](https://serpapi.com)
+   - Free tier: 250 searches/month
+   - Paid plans available for higher volume
+
+2. **Configure the API Key in MCP**
+
+   Add the `env` parameter to your MCP configuration:
+
+   **Claude Desktop** (`claude_desktop_config.json`):
+   ```json
+   {
+     "mcpServers": {
+       "google-flights": {
+         "command": "uvx",
+         "args": ["mcp-server-google-flights"],
+         "env": {
+           "SERPAPI_API_KEY": "your_serpapi_key_here"
+         }
+       }
+     }
+   }
+   ```
+
+   **Cline** (`.cline/cline_mcp_settings.json`):
+   ```json
+   {
+     "mcpServers": {
+       "google-flights": {
+         "command": "uvx",
+         "args": ["mcp-server-google-flights"],
+         "disabled": false,
+         "autoApprove": [],
+         "env": {
+           "SERPAPI_API_KEY": "your_serpapi_key_here"
+         }
+       }
+     }
+   }
+   ```
+
+3. **Restart your MCP client** to apply the changes
+
+#### How It Works
+
+- The server always tries `fast-flights` (free scraping) first
+- If scraping fails or returns an error, it automatically tries SerpApi
+- Results from SerpApi include `"data_source": "SerpApi (fallback)"` in the response
+- If no API key is configured, fallback is disabled and errors are returned normally
+
+#### Verifying SerpApi is Enabled
+
+Check the server logs when it starts. You should see:
+```
+[SerpApi] Fallback enabled with API key
+```
+
+If the API key is not configured, you'll see:
+```
+[SerpApi] API key not configured - set SERPAPI_API_KEY env var for fallback support
+```
 
 ### Verify Installation
 
