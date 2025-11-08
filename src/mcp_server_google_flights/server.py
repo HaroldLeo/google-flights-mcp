@@ -9,7 +9,7 @@ from typing import Any, Optional, Dict
 
 # Import fast_flights from pip package
 try:
-    from fast_flights import FlightQuery, Passengers, get_flights
+    from fast_flights import FlightQuery, Passengers, get_flights, create_query
 except ImportError as e:
     print(f"Error importing fast_flights: {e}", file=sys.stderr)
     print(f"Please install fast_flights: pip install fast-flights", file=sys.stderr)
@@ -543,38 +543,7 @@ def reliable_search_strategy() -> str:
 
 ## 🎯 Choose Your Fetch Mode
 
-All search tools now support a `fetch_mode` parameter to control how flight data is retrieved:
-
-### **"fallback"** (Recommended Default)
-- ✅ Best balance of speed and reliability
-- Tries fast scraping first, falls back to browser if needed
-- No setup required
-- Use this unless you have specific needs
-
-### **"common"** (Fastest, Less Reliable)
-- ⚡ Fastest method
-- Direct HTML scraping
-- May fail during high traffic or if Google changes their page
-- Good for: Quick searches, testing
-
-### **"force-fallback"** (Most Reliable)
-- 🛡️ Always uses serverless Playwright browser
-- Slower but handles JavaScript rendering
-- More reliable for complex searches
-- Good for: Important searches, when "fallback" fails
-
-### **"local"** (Unlimited Searches)
-- 🏠 Uses YOUR local Playwright installation
-- No rate limits or serverless restrictions
-- Requires: `pip install fast-flights[local]` and `playwright install`
-- Good for: Power users, high-volume searching, avoiding 401 errors
-
-### **"bright-data"** (Commercial Grade)
-- 💼 Professional web scraping service
-- Bypasses CAPTCHAs and rate limiting automatically
-- Requires: Bright Data account
-- Good for: Commercial use, production applications
-
+NOTE: The fast-flights 3.0 API has been simplified and no longer requires fetch_mode configuration.
 ## 🔧 Troubleshooting Guide
 
 ### Problem: "No flights found" or Empty Results
@@ -667,8 +636,7 @@ async def search_one_way_flights(
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
     max_results: int = 10,
-    compact_mode: bool = False,
-    fetch_mode: str = "fallback"
+    compact_mode: bool = False
 ) -> str:
     """
     Fetches available one-way flights for a specific date between two airports.
@@ -684,8 +652,6 @@ async def search_one_way_flights(
         infants_on_lap: Number of infants on lap (under 2 years, default: 0).
         seat_type: Fare class - economy/premium_economy/business/first (default: "economy").
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
-        fetch_mode: Fetch method - "common" (default), "fallback" (recommended), "force-fallback", "local", or "bright-data".
-                   Use "fallback" for best reliability. "local" requires Playwright installed. "bright-data" requires account.
 
     Example Args:
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20"}
@@ -699,7 +665,7 @@ async def search_one_way_flights(
         # Validate date format
         datetime.datetime.strptime(date, '%Y-%m-%d')
 
-        flight_data = [
+        flights = [
             FlightQuery(date=date, from_airport=origin, to_airport=destination),
         ]
         passengers_info = Passengers(
@@ -710,13 +676,13 @@ async def search_one_way_flights(
         )
 
         log_info(TOOL, "Fetching flights from Google Flights...")
-        result = get_flights(
-            flight_data=flight_data,
+        query = create_query(
+            flights=flights,
             trip="one-way",
             seat=seat_type,
-            passengers=passengers_info,
-            fetch_mode=fetch_mode
+            passengers=passengers_info
         )
+        result = get_flights(query)
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} flight(s)")
@@ -821,7 +787,7 @@ async def search_one_way_flights(
 
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
-            "suggestion": "Try using fetch_mode='force-fallback' or 'local' for better reliability. See the 'reliable_search_strategy' prompt for more help."
+            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly."
         }
         if google_flights_url:
             response_data["google_flights_url"] = google_flights_url
@@ -842,8 +808,7 @@ async def search_round_trip_flights(
     max_stops: int = 2,
     return_cheapest_only: bool = False,
     max_results: int = 10,
-    compact_mode: bool = False,
-    fetch_mode: str = "fallback"
+    compact_mode: bool = False
 ) -> str:
     """
     Fetches available round-trip flights for specific departure and return dates.
@@ -865,8 +830,6 @@ async def search_round_trip_flights(
         max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
                    Lower values = more reliable scraping. Set higher if needed, but may reduce reliability.
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
-        fetch_mode: Fetch method - "common" (default), "fallback" (recommended), "force-fallback", "local", or "bright-data".
-                   Use "fallback" for best reliability. "local" requires Playwright installed. "bright-data" requires account.
 
     Example Args:
         {"origin": "DEN", "destination": "LAX", "departure_date": "2025-08-01", "return_date": "2025-08-08"}
@@ -883,7 +846,7 @@ async def search_round_trip_flights(
         datetime.datetime.strptime(departure_date, '%Y-%m-%d')
         datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
-        flight_data = [
+        flights = [
             FlightQuery(date=departure_date, from_airport=origin, to_airport=destination),
             FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
         ]
@@ -895,14 +858,14 @@ async def search_round_trip_flights(
         )
 
         log_info(TOOL, "Fetching flights from Google Flights...")
-        result = get_flights(
-            flight_data=flight_data,
+        query = create_query(
+            flights=flights,
             trip="round-trip",
             seat=seat_type,
             passengers=passengers_info,
-            max_stops=max_stops,
-            fetch_mode=fetch_mode
+            max_stops=max_stops
         )
+        result = get_flights(query)
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} round-trip option(s)")
@@ -1000,7 +963,7 @@ async def search_round_trip_flights(
 
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
-            "suggestion": "Try using fetch_mode='force-fallback' or 'local' for better reliability. See the 'reliable_search_strategy' prompt for more help."
+            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly."
         }
         if google_flights_url:
             response_data["google_flights_url"] = google_flights_url
@@ -1020,8 +983,7 @@ async def search_round_trips_in_date_range(
     return_cheapest_only: bool = False,
     max_results: int = 10,
     offset: int = 0,
-    limit: int = 20,
-    fetch_mode: str = "fallback"
+    limit: int = 20
 ) -> str:
     """
     Finds available round-trip flights within a specified date range.
@@ -1053,8 +1015,6 @@ async def search_round_trips_in_date_range(
         offset: Number of results to skip (for pagination, default: 0).
         compact_mode: If True, return only essential fields (saves ~40% tokens, default: False).
         limit: Maximum number of date pairs to process (for pagination, default: 20).
-        fetch_mode: Fetch method - "common" (default), "fallback" (recommended), "force-fallback", "local", or "bright-data".
-                   Use "fallback" for best reliability. "local" requires Playwright installed. "bright-data" requires account.
 
     Example Args:
         {"origin": "JFK", "destination": "MIA", "start_date_str": "2025-09-10", "end_date_str": "2025-09-20", "min_stay_days": 5}
@@ -1140,19 +1100,14 @@ async def search_round_trips_in_date_range(
             log_info(TOOL, f"Progress: {count}/{total_combinations} - {depart_date.strftime('%Y-%m-%d')}→{return_date.strftime('%Y-%m-%d')}")
 
         try:
-            flight_data = [
+            flights = [
                 FlightQuery(date=depart_date.strftime('%Y-%m-%d'), from_airport=origin, to_airport=destination),
                 FlightQuery(date=return_date.strftime('%Y-%m-%d'), from_airport=destination, to_airport=origin),
             ]
             passengers_info = Passengers(adults=adults)
 
-            result = get_flights(
-                flight_data=flight_data,
-                trip="round-trip",
-                seat=seat_type,
-                passengers=passengers_info,
-            fetch_mode=fetch_mode,
-            )
+            query = create_query(flights=flights, trip="round-trip", seat=seat_type, passengers=passengers_info)
+            result = get_flights(query)
 
             # Collect results based on mode
             if result and result.flights:
@@ -1230,8 +1185,7 @@ async def get_multi_city_flights(
     adults: int = 1,
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
-    max_results: int = 10,
-    fetch_mode: str = "fallback"
+    max_results: int = 10
 ) -> str:
     """
     Fetches multi-city/multi-stop itineraries for complex trip planning.
@@ -1266,7 +1220,7 @@ async def get_multi_city_flights(
         log_debug(TOOL, "constraints", f"adults={adults}, seat={seat_type}")
 
         # Validate and build flight data
-        flight_data = []
+        flights = []
         for i, segment in enumerate(segments):
             if not all(k in segment for k in ["date", "from", "to"]):
                 log_error(TOOL, "ValueError", f"Segment {i} missing required fields")
@@ -1279,20 +1233,20 @@ async def get_multi_city_flights(
                 log_error(TOOL, "ValueError", f"Segment {i} invalid date: {segment['date']}")
                 return json.dumps({"error": {"message": f"Invalid date format in segment {i}: '{segment['date']}'. Use YYYY-MM-DD.", "type": "ValueError"}})
 
-            flight_data.append(
+            flights.append(
                 FlightQuery(date=segment["date"], from_airport=segment["from"], to_airport=segment["to"])
             )
 
         passengers_info = Passengers(adults=adults)
 
         log_info(TOOL, "Fetching flights from Google Flights...")
-        result = get_flights(
-            flight_data=flight_data,
+        query = create_query(
+            flights=flights,
             trip="multi-city",
             seat=seat_type,
-            passengers=passengers_info,
-            fetch_mode=fetch_mode
+            passengers=passengers_info
         )
+        result = get_flights(query)
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} multi-city option(s)")
@@ -1368,7 +1322,7 @@ async def get_multi_city_flights(
 
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
-            "suggestion": "Try using fetch_mode='force-fallback' or 'local' for better reliability. See the 'reliable_search_strategy' prompt for more help."
+            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly."
         }
         if google_flights_url:
             response_data["google_flights_url"] = google_flights_url
@@ -1388,8 +1342,7 @@ async def search_direct_flights(
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
     max_results: int = 10,
-    compact_mode: bool = False,
-    fetch_mode: str = "fallback"
+    compact_mode: bool = False
 ) -> str:
     """
     Search for direct flights only (no stops). Supports both one-way and round-trip.
@@ -1406,8 +1359,6 @@ async def search_direct_flights(
         infants_on_lap: Number of infants on lap (under 2 years, default: 0).
         seat_type: Fare class - economy/premium_economy/business/first (default: "economy").
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
-        fetch_mode: Fetch method - "common" (default), "fallback" (recommended), "force-fallback", "local", or "bright-data".
-                   Use "fallback" for best reliability. "local" requires Playwright installed. "bright-data" requires account.
 
     Example Args:
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20"}
@@ -1426,14 +1377,14 @@ async def search_direct_flights(
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
             log_info(TOOL, f"Direct round-trip {origin}↔{destination} ({date} to {return_date})")
-            flight_data = [
+            flights = [
                 FlightQuery(date=date, from_airport=origin, to_airport=destination),
                 FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
             ]
             trip_type = "round-trip"
         else:
             log_info(TOOL, f"Direct one-way {origin}→{destination} on {date}")
-            flight_data = [
+            flights = [
                 FlightQuery(date=date, from_airport=origin, to_airport=destination),
             ]
             trip_type = "one-way"
@@ -1448,14 +1399,14 @@ async def search_direct_flights(
         )
 
         log_info(TOOL, "Fetching direct flights from Google Flights...")
-        result = get_flights(
-            flight_data=flight_data,
+        query = create_query(
+            flights=flights,
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
-            max_stops=0,  # Direct flights only
-            fetch_mode=fetch_mode
+            max_stops=0  # Direct flights only
         )
+        result = get_flights(query)
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} direct flight(s)")
@@ -1542,7 +1493,7 @@ async def search_direct_flights(
 
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
-            "suggestion": "Try using fetch_mode='force-fallback' or 'local' for better reliability. See the 'reliable_search_strategy' prompt for more help."
+            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly."
         }
         if google_flights_url:
             response_data["google_flights_url"] = google_flights_url
@@ -1562,8 +1513,7 @@ async def search_flights_by_airline(
     max_stops: int = 2,
     return_cheapest_only: bool = False,
     max_results: int = 10,
-    compact_mode: bool = False,
-    fetch_mode: str = "fallback"
+    compact_mode: bool = False
 ) -> str:
     """
     Search flights filtered by specific airlines or alliances.
@@ -1584,8 +1534,6 @@ async def search_flights_by_airline(
         seat_type: Fare class (default: "economy").
         max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
-        fetch_mode: Fetch method - "common" (default), "fallback" (recommended), "force-fallback", "local", or "bright-data".
-                   Use "fallback" for best reliability. "local" requires Playwright installed. "bright-data" requires account.
 
     Example Args:
         {"origin": "SFO", "destination": "TYO", "date": "2026-02-20", "airlines": "UA"}
@@ -1620,14 +1568,14 @@ async def search_flights_by_airline(
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
             log_debug(TOOL, "dates", f"{date} to {return_date}")
 
-            flight_data = [
+            flights = [
                 FlightQuery(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
                 FlightQuery(date=return_date, from_airport=destination, to_airport=origin, airlines=airlines_list),
             ]
             trip_type = "round-trip"
         else:
             log_debug(TOOL, "date", date)
-            flight_data = [
+            flights = [
                 FlightQuery(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
             ]
             trip_type = "one-way"
@@ -1635,14 +1583,14 @@ async def search_flights_by_airline(
         passengers_info = Passengers(adults=adults)
 
         log_info(TOOL, "Fetching flights from Google Flights...")
-        result = get_flights(
-            flight_data=flight_data,
+        query = create_query(
+            flights=flights,
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
-            max_stops=max_stops,
-            fetch_mode=fetch_mode
+            max_stops=max_stops
         )
+        result = get_flights(query)
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} flight(s)")
@@ -1750,8 +1698,7 @@ async def search_flights_with_max_stops(
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
     max_results: int = 10,
-    compact_mode: bool = False,
-    fetch_mode: str = "fallback"
+    compact_mode: bool = False
 ) -> str:
     """
     Search flights with a maximum number of stops (0=direct, 1=one stop, 2=two stops).
@@ -1766,8 +1713,6 @@ async def search_flights_with_max_stops(
         adults: Number of adult passengers (default: 1).
         seat_type: Fare class (default: "economy").
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
-        fetch_mode: Fetch method - "common" (default), "fallback" (recommended), "force-fallback", "local", or "bright-data".
-                   Use "fallback" for best reliability. "local" requires Playwright installed. "bright-data" requires account.
 
     Example Args:
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "max_stops": 1}
@@ -1791,14 +1736,14 @@ async def search_flights_with_max_stops(
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
             log_info(TOOL, f"Round-trip {origin}↔{destination} with ≤{max_stops} stops ({date} to {return_date})")
-            flight_data = [
+            flights = [
                 FlightQuery(date=date, from_airport=origin, to_airport=destination),
                 FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
             ]
             trip_type = "round-trip"
         else:
             log_info(TOOL, f"One-way {origin}→{destination} with ≤{max_stops} stops on {date}")
-            flight_data = [
+            flights = [
                 FlightQuery(date=date, from_airport=origin, to_airport=destination),
             ]
             trip_type = "one-way"
@@ -1806,14 +1751,14 @@ async def search_flights_with_max_stops(
         passengers_info = Passengers(adults=adults)
 
         log_info(TOOL, "Fetching flights from Google Flights...")
-        result = get_flights(
-            flight_data=flight_data,
+        query = create_query(
+            flights=flights,
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
-            max_stops=max_stops,
-            fetch_mode=fetch_mode
+            max_stops=max_stops
         )
+        result = get_flights(query)
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} flight(s)")
@@ -1899,7 +1844,7 @@ async def search_flights_with_max_stops(
 
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
-            "suggestion": "Try using fetch_mode='force-fallback' or 'local' for better reliability. See the 'reliable_search_strategy' prompt for more help."
+            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly."
         }
         if google_flights_url:
             response_data["google_flights_url"] = google_flights_url
