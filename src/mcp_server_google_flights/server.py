@@ -1320,6 +1320,11 @@ async def get_multi_city_flights(
     but may not be able to parse the results. If parsing fails, you'll receive a direct link to
     view the flights on Google Flights.
 
+    💡 RECOMMENDATION FOR AI AGENTS: Instead of using this function, consider using the
+    get_one_way_flights() function multiple times (once for each leg of the journey) and
+    combining the results. This approach is more reliable and provides detailed flight
+    information for each segment, which you can then present together as a complete itinerary.
+
     Args:
         flight_segments: JSON string of flight segments. Each segment should have "date", "from", and "to" fields.
                         Example: '[{"date": "2025-07-01", "from": "SFO", "to": "NYC"}, {"date": "2025-07-05", "from": "NYC", "to": "MIA"}, {"date": "2025-07-10", "from": "MIA", "to": "SFO"}]'
