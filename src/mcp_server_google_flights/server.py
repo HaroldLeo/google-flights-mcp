@@ -9,7 +9,7 @@ from typing import Any, Optional, Dict
 
 # Import fast_flights from pip package
 try:
-    from fast_flights import FlightData, Passengers, get_flights
+    from fast_flights import FlightQuery, Passengers, get_flights
 except ImportError as e:
     print(f"Error importing fast_flights: {e}", file=sys.stderr)
     print(f"Please install fast_flights: pip install fast-flights", file=sys.stderr)
@@ -700,7 +700,7 @@ async def search_one_way_flights(
         datetime.datetime.strptime(date, '%Y-%m-%d')
 
         flight_data = [
-            FlightData(date=date, from_airport=origin, to_airport=destination),
+            FlightQuery(date=date, from_airport=origin, to_airport=destination),
         ]
         passengers_info = Passengers(
             adults=adults,
@@ -884,8 +884,8 @@ async def search_round_trip_flights(
         datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
         flight_data = [
-            FlightData(date=departure_date, from_airport=origin, to_airport=destination),
-            FlightData(date=return_date, from_airport=destination, to_airport=origin),
+            FlightQuery(date=departure_date, from_airport=origin, to_airport=destination),
+            FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
         ]
         passengers_info = Passengers(
             adults=adults,
@@ -1141,8 +1141,8 @@ async def search_round_trips_in_date_range(
 
         try:
             flight_data = [
-                FlightData(date=depart_date.strftime('%Y-%m-%d'), from_airport=origin, to_airport=destination),
-                FlightData(date=return_date.strftime('%Y-%m-%d'), from_airport=destination, to_airport=origin),
+                FlightQuery(date=depart_date.strftime('%Y-%m-%d'), from_airport=origin, to_airport=destination),
+                FlightQuery(date=return_date.strftime('%Y-%m-%d'), from_airport=destination, to_airport=origin),
             ]
             passengers_info = Passengers(adults=adults)
 
@@ -1280,7 +1280,7 @@ async def get_multi_city_flights(
                 return json.dumps({"error": {"message": f"Invalid date format in segment {i}: '{segment['date']}'. Use YYYY-MM-DD.", "type": "ValueError"}})
 
             flight_data.append(
-                FlightData(date=segment["date"], from_airport=segment["from"], to_airport=segment["to"])
+                FlightQuery(date=segment["date"], from_airport=segment["from"], to_airport=segment["to"])
             )
 
         passengers_info = Passengers(adults=adults)
@@ -1427,14 +1427,14 @@ async def search_direct_flights(
 
             log_info(TOOL, f"Direct round-trip {origin}↔{destination} ({date} to {return_date})")
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
-                FlightData(date=return_date, from_airport=destination, to_airport=origin),
+                FlightQuery(date=date, from_airport=origin, to_airport=destination),
+                FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
             ]
             trip_type = "round-trip"
         else:
             log_info(TOOL, f"Direct one-way {origin}→{destination} on {date}")
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
+                FlightQuery(date=date, from_airport=origin, to_airport=destination),
             ]
             trip_type = "one-way"
 
@@ -1621,14 +1621,14 @@ async def search_flights_by_airline(
             log_debug(TOOL, "dates", f"{date} to {return_date}")
 
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
-                FlightData(date=return_date, from_airport=destination, to_airport=origin, airlines=airlines_list),
+                FlightQuery(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
+                FlightQuery(date=return_date, from_airport=destination, to_airport=origin, airlines=airlines_list),
             ]
             trip_type = "round-trip"
         else:
             log_debug(TOOL, "date", date)
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
+                FlightQuery(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
             ]
             trip_type = "one-way"
 
@@ -1792,14 +1792,14 @@ async def search_flights_with_max_stops(
 
             log_info(TOOL, f"Round-trip {origin}↔{destination} with ≤{max_stops} stops ({date} to {return_date})")
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
-                FlightData(date=return_date, from_airport=destination, to_airport=origin),
+                FlightQuery(date=date, from_airport=origin, to_airport=destination),
+                FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
             ]
             trip_type = "round-trip"
         else:
             log_info(TOOL, f"One-way {origin}→{destination} with ≤{max_stops} stops on {date}")
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
+                FlightQuery(date=date, from_airport=origin, to_airport=destination),
             ]
             trip_type = "one-way"
 
