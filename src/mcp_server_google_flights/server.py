@@ -57,16 +57,29 @@ def format_datetime(simple_datetime):
         simple_datetime: SimpleDatetime object with date tuple (year, month, day) and time tuple (hour, minute)
 
     Returns:
-        ISO formatted datetime string (YYYY-MM-DD HH:MM)
+        ISO formatted datetime string (YYYY-MM-DD HH:MM) or (YYYY-MM-DD) if time is missing
     """
     if not simple_datetime:
         return None
     try:
         year, month, day = simple_datetime.date
-        hour, minute = simple_datetime.time
-        return f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}"
-    except (AttributeError, ValueError, TypeError):
-        return str(simple_datetime)
+        # Handle cases where time might be missing or None
+        time_attr = getattr(simple_datetime, 'time', None)
+        if time_attr is not None and len(time_attr) >= 2:
+            hour, minute = time_attr[0], time_attr[1]
+            return f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}"
+        else:
+            # Return date only if time is missing
+            return f"{year:04d}-{month:02d}-{day:02d}"
+    except (AttributeError, ValueError, TypeError) as e:
+        # Last resort fallback - try to extract just the date
+        try:
+            if hasattr(simple_datetime, 'date'):
+                year, month, day = simple_datetime.date
+                return f"{year:04d}-{month:02d}-{day:02d}"
+        except:
+            pass
+        return None
 
 def format_duration(minutes):
     """Convert duration in minutes to human-readable format.
@@ -813,6 +826,10 @@ async def search_one_way_flights(
             seat=seat_type,
             passengers=passengers_info
         )
+
+        # Generate booking URL for successful responses
+        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
+
         result = get_flights(query)
 
         if result:
@@ -840,7 +857,8 @@ async def search_one_way_flights(
                     "seat_type": seat_type,
                     "return_cheapest_only": return_cheapest_only
                 },
-                result_key: processed_flights
+                result_key: processed_flights,
+                "booking_url": google_flights_url
             }
             # Add result metadata for transparency
             if not return_cheapest_only and max_results > 0:
@@ -988,6 +1006,10 @@ async def search_round_trip_flights(
             passengers=passengers_info,
             max_stops=max_stops
         )
+
+        # Generate booking URL for successful responses
+        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
+
         result = get_flights(query)
 
         if result:
@@ -1018,7 +1040,8 @@ async def search_round_trip_flights(
                     "max_stops": max_stops,
                     "return_cheapest_only": return_cheapest_only
                 },
-                result_key: processed_flights
+                result_key: processed_flights,
+                "booking_url": google_flights_url
             }
             return json.dumps(output_data, indent=2)
         else:
@@ -1230,6 +1253,10 @@ async def search_round_trips_in_date_range(
             passengers_info = Passengers(adults=adults)
 
             query = create_query(flights=flights, trip="round-trip", seat=seat_type, passengers=passengers_info, max_stops=max_stops)
+
+            # Generate booking URL for this date pair
+            date_pair_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
+
             result = get_flights(query)
 
             # Collect results based on mode
@@ -1240,7 +1267,8 @@ async def search_round_trips_in_date_range(
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
-                        "cheapest_flight": flight_to_dict(cheapest_flight_for_pair) # Store single cheapest
+                        "cheapest_flight": flight_to_dict(cheapest_flight_for_pair), # Store single cheapest
+                        "booking_url": date_pair_url
                     })
                 else:
                     # Store all flights for this pair
@@ -1248,7 +1276,8 @@ async def search_round_trips_in_date_range(
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
-                        "flights": flights_list # Store list of all flights
+                        "flights": flights_list, # Store list of all flights
+                        "booking_url": date_pair_url
                     })
             # else: # Optional: Log if no flights were found for a specific pair
                 # print(f"MCP Tool: No flights found for {depart_date.strftime('%Y-%m-%d')} -> {return_date.strftime('%Y-%m-%d')}", file=sys.stderr)
@@ -1405,7 +1434,8 @@ async def get_multi_city_flights(
                     "seat_type": seat_type,
                     "return_cheapest_only": return_cheapest_only
                 },
-                result_key: processed_flights
+                result_key: processed_flights,
+                "booking_url": google_flights_url
             }
             return json.dumps(output_data, indent=2)
         else:
@@ -1556,6 +1586,10 @@ async def search_direct_flights(
             passengers=passengers_info,
             max_stops=0  # Direct flights only
         )
+
+        # Generate booking URL for successful responses
+        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
+
         result = get_flights(query)
 
         if result:
@@ -1582,7 +1616,8 @@ async def search_direct_flights(
                     "max_stops": 0,
                     "return_cheapest_only": return_cheapest_only
                 },
-                result_key: processed_flights
+                result_key: processed_flights,
+                "booking_url": google_flights_url
             }
             return json.dumps(output_data, indent=2)
         else:
@@ -1738,6 +1773,10 @@ async def search_flights_by_airline(
             passengers=passengers_info,
             max_stops=max_stops
         )
+
+        # Generate booking URL for successful responses
+        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
+
         result = get_flights(query)
 
         if result:
@@ -1764,7 +1803,8 @@ async def search_flights_by_airline(
                     "max_stops": max_stops,
                     "return_cheapest_only": return_cheapest_only
                 },
-                result_key: processed_flights
+                result_key: processed_flights,
+                "booking_url": google_flights_url
             }
             return json.dumps(output_data, indent=2)
         else:
@@ -1904,6 +1944,10 @@ async def search_flights_with_max_stops(
             passengers=passengers_info,
             max_stops=max_stops
         )
+
+        # Generate booking URL for successful responses
+        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
+
         result = get_flights(query)
 
         if result:
@@ -1929,7 +1973,8 @@ async def search_flights_with_max_stops(
                     "seat_type": seat_type,
                     "return_cheapest_only": return_cheapest_only
                 },
-                result_key: processed_flights
+                result_key: processed_flights,
+                "booking_url": google_flights_url
             }
             return json.dumps(output_data, indent=2)
         else:
