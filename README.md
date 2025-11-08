@@ -25,7 +25,7 @@ Transform how you search for flights with AI assistance. This MCP server integra
 - Plan complex multi-city itineraries
 - Filter by passengers, cabin class, and preferences
 
-Built on the powerful `fast-flights` library, this server provides 14 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
+Built on the powerful `fast-flights` library, this server provides 10 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
 
 ---
 
@@ -45,7 +45,7 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 
 ## Features
 
-### Flight Search Tools (14 Total)
+### Flight Search Tools (10 Total)
 
 #### Core Search Tools
 
@@ -55,7 +55,6 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 | `search_round_trip_flights` | Round-trip flights with fixed dates | Standard vacation planning |
 | `search_round_trips_in_date_range` | Flexible date range search | Finding the best deal within a window |
 | `get_multi_city_flights` | Multi-stop itineraries | Complex trips with multiple destinations |
-| `compare_nearby_airports` | Multi-airport price comparison | Comparing NYC airports (JFK/LGA/EWR) |
 
 #### Specialized Search Tools
 
@@ -64,14 +63,6 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 | `search_direct_flights` | Direct flights only (no stops) | Time-sensitive travel, families with kids |
 | `search_flights_by_airline` | Filter by airline or alliance | Loyalty programs, airline preferences |
 | `search_flights_with_max_stops` | Control maximum number of stops | Balancing price and convenience |
-
-#### Filter & Analysis Tools
-
-| Tool | Description | Best For |
-|------|-------------|----------|
-| `filter_by_departure_time` | Filter by time of day | Morning/afternoon/evening/red-eye preferences |
-| `filter_by_max_duration` | Filter by total travel time | Time-sensitive travelers |
-| `compare_one_way_vs_roundtrip` | Compare pricing strategies | Finding hidden savings |
 
 #### Utility Tools
 
@@ -89,6 +80,7 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 - **`find_best_deal`** - Comprehensive search strategy to find the absolute cheapest flights
 - **`weekend_getaway`** - Find the best weekend getaway flights (Fri-Sun or Sat-Mon patterns)
 - **`last_minute_travel`** - Optimized search for urgent travel needs within the next 2 weeks
+- **`reliable_search_strategy`** - 🆕 Guide for choosing fetch modes and troubleshooting
 
 #### Specialized Travel
 - **`business_trip`** - Business travel focused on schedule convenience and direct flights
@@ -105,7 +97,13 @@ Built on the powerful `fast-flights` library, this server provides 14 specialize
 - **All cabin classes**: Economy, Premium Economy, Business, First
 - **Flexible filtering**: Return only cheapest flights or see all options
 - **Date intelligence**: Search by date ranges, relative dates, or flexible months
-- **Error handling**: Robust error recovery and helpful feedback
+- **Price context indicators**: 🆕 Know if prices are "low", "typical", or "high"
+- **Native airline filtering**: 🆕 Powered by fast-flights 3.0rc0 for reliable results
+- **Multiple fetch modes**: 🆕 Choose reliability vs speed (common/fallback/force-fallback/local/bright-data)
+- **Token-efficient modes**: 🆕 Compact mode (save ~40% tokens)
+- **Result limiting**: 🆕 `max_results` parameter prevents token overload
+- **Pagination support**: 🆕 `offset`/`limit` for progressive data loading
+- **Error handling**: Robust error recovery with helpful suggestions
 
 ---
 
@@ -277,13 +275,13 @@ You: "Plan a trip: San Francisco -> Paris (3 days) -> Rome (4 days) -> back to S
 
 The AI will use `get_multi_city_flights` with calculated dates for each segment.
 
-### Example 4: Airport Comparison
+### Example 4: Direct Flights Only
 
 ```
-You: "Compare flight prices from all NYC airports to Miami on December 20, 2026."
+You: "Find direct flights from Chicago to Seattle on March 15, 2026."
 ```
 
-The AI will use `compare_nearby_airports` with JFK, LGA, and EWR.
+The AI will use `search_direct_flights` to filter out any flights with connections.
 
 ---
 
@@ -372,27 +370,6 @@ Search complex multi-city itineraries.
 
 ---
 
-#### `compare_nearby_airports`
-
-Compare prices from multiple origin airports to multiple destinations.
-
-**Parameters:**
-- `origin_airports` (JSON array, required): List of origin airport codes
-  ```json
-  ["JFK", "LGA", "EWR"]
-  ```
-- `destination_airports` (JSON array, required): List of destination codes
-  ```json
-  ["LAX", "SFO"]
-  ```
-- `date` (string, required): Travel date (YYYY-MM-DD)
-- `adults` (integer, default: 1): Number of adults
-- `seat_type` (string, default: "economy"): Cabin class
-
-**Returns:** Price comparison across all airport combinations.
-
----
-
 #### `search_direct_flights`
 
 Search for direct flights only (no stops) for one-way or round-trip.
@@ -465,65 +442,6 @@ Search flights with a maximum number of stops.
 **Example:**
 ```json
 {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "max_stops": 1}
-```
-
----
-
-#### `filter_by_departure_time`
-
-Filter existing flight results by departure time of day.
-
-**Parameters:**
-- `flights_json` (string, required): JSON string of flight results from another search
-- `time_of_day` (string, required): Time preference
-  - `"morning"` (6am-12pm)
-  - `"afternoon"` (12pm-6pm)
-  - `"evening"` (6pm-12am)
-  - `"red-eye"` (12am-6am)
-
-**Returns:** Filtered flights matching the time preference.
-
-**Example:**
-```json
-{"flights_json": "[{...}]", "time_of_day": "morning"}
-```
-
----
-
-#### `filter_by_max_duration`
-
-Filter existing flight results by maximum travel duration.
-
-**Parameters:**
-- `flights_json` (string, required): JSON string of flight results from another search
-- `max_hours` (integer, required): Maximum acceptable flight duration in hours
-
-**Returns:** Flights within the duration limit.
-
-**Example:**
-```json
-{"flights_json": "[{...}]", "max_hours": 8}
-```
-
----
-
-#### `compare_one_way_vs_roundtrip`
-
-Compare pricing for round-trip ticket vs two one-way tickets.
-
-**Parameters:**
-- `origin` (string, required): Departure airport code
-- `destination` (string, required): Arrival airport code
-- `departure_date` (string, required): Outbound date (YYYY-MM-DD)
-- `return_date` (string, required): Return date (YYYY-MM-DD)
-- `adults` (integer, default: 1): Number of adults
-- `seat_type` (string, default: "economy"): Cabin class
-
-**Returns:** Price comparison with recommendation and potential savings.
-
-**Example:**
-```json
-{"origin": "SFO", "destination": "JFK", "departure_date": "2025-07-20", "return_date": "2025-07-27"}
 ```
 
 ---
@@ -632,9 +550,6 @@ playwright install --with-deps
 - `search_round_trips_in_date_range` - **Maximum 30 date combinations**
   - Example: 7-day range with 5-7 day stays = ~10-15 requests (OK)
   - Example: 14-day range with no filters = ~105 requests (REJECTED)
-- `compare_nearby_airports` - **Maximum 12 airport combinations**
-  - Example: 3 origins × 3 destinations = 9 requests (OK)
-  - Example: 4 origins × 4 destinations = 16 requests (REJECTED)
 
 **Solutions:**
 - **For date range searches:**
@@ -642,11 +557,6 @@ playwright install --with-deps
   - Use `min_stay_days` and `max_stay_days` filters
   - Use `return_cheapest_only=true` for faster results
   - Split large searches into multiple smaller ones
-
-- **For airport comparisons:**
-  - Limit to 2-3 airports per list
-  - Compare fewer combinations at once
-  - Make multiple smaller comparisons if needed
 
 **Why these limits exist:** Without them, searches with 100+ requests would take 30+ minutes and get your IP blocked by Google.
 
