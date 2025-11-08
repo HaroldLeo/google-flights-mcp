@@ -676,7 +676,7 @@ async def search_one_way_flights(
             seat=seat_type,
             passengers=passengers_info
         )
-        result = get_flights(query)
+        result = get_flights(query, data_source='js')
 
         if result:
             log_info(TOOL, f"Found {len(result)} flight(s)")
@@ -851,7 +851,7 @@ async def search_round_trip_flights(
             passengers=passengers_info,
             max_stops=max_stops
         )
-        result = get_flights(query)
+        result = get_flights(query, data_source='js')
 
         if result:
             log_info(TOOL, f"Found {len(result)} round-trip option(s)")
@@ -1091,7 +1091,7 @@ async def search_round_trips_in_date_range(
             passengers_info = Passengers(adults=adults)
 
             query = create_query(flights=flights, trip="round-trip", seat=seat_type, passengers=passengers_info)
-            result = get_flights(query)
+            result = get_flights(query, data_source='js')
 
             # Collect results based on mode
             if result:
@@ -1169,7 +1169,8 @@ async def get_multi_city_flights(
     adults: int = 1,
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
-    max_results: int = 10
+    max_results: int = 10,
+    compact_mode: bool = False
 ) -> str:
     """
     Fetches multi-city/multi-stop itineraries for complex trip planning.
@@ -1230,7 +1231,7 @@ async def get_multi_city_flights(
             seat=seat_type,
             passengers=passengers_info
         )
-        result = get_flights(query)
+        result = get_flights(query, data_source='js')
 
         if result:
             log_info(TOOL, f"Found {len(result)} multi-city option(s)")
@@ -1388,7 +1389,7 @@ async def search_direct_flights(
             passengers=passengers_info,
             max_stops=0  # Direct flights only
         )
-        result = get_flights(query)
+        result = get_flights(query, data_source='js')
 
         if result:
             log_info(TOOL, f"Found {len(result)} direct flight(s)")
@@ -1570,7 +1571,7 @@ async def search_flights_by_airline(
             passengers=passengers_info,
             max_stops=max_stops
         )
-        result = get_flights(query)
+        result = get_flights(query, data_source='js')
 
         if result:
             log_info(TOOL, f"Found {len(result)} flight(s)")
@@ -1736,7 +1737,7 @@ async def search_flights_with_max_stops(
             passengers=passengers_info,
             max_stops=max_stops
         )
-        result = get_flights(query)
+        result = get_flights(query, data_source='js')
 
         if result:
             log_info(TOOL, f"Found {len(result)} flight(s)")
