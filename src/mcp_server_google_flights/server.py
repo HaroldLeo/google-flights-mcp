@@ -122,29 +122,99 @@ def format_duration(minutes):
         return f"{mins}m"
 
 def flight_to_dict(flight, compact=False, origin=None, destination=None):
-    """Converts a Flights object to a dictionary with detailed flight information.
+    """Converts a Flight/Flights object to a dictionary with detailed flight information.
+
+    Supports both fast-flights v2.2 and v3.0rc0 structures.
 
     Args:
-        flight: Flights object from fast-flights 3.0rc0
+        flight: Flight object (v2.2) or Flights object (v3.0rc0)
         compact: If True, return only essential fields (saves ~40% tokens)
         origin: Optional origin airport code for round-trip leg detection
         destination: Optional destination airport code for round-trip leg detection
 
-    The Flights object structure (fast-flights 3.0rc0):
+    v2.2 Flight structure (simpler):
+        - is_best: bool - If this is a recommended flight
+        - name: str - Airline name
+        - departure: time - Departure time
+        - arrival: time - Arrival time
+        - duration: int - Duration
+        - stops: int - Number of stops
+        - price: int - Price
+
+    v3.0rc0 Flights structure (detailed):
         - type: str - Type of flight
         - price: int - Total price
         - airlines: list[str] - List of airline names
         - flights: list[SingleFlight] - List of flight segments
         - carbon: CarbonEmission - Carbon emission data
-
-    Each SingleFlight has:
-        - from_airport: Airport (name, code)
-        - to_airport: Airport (name, code)
-        - departure: SimpleDatetime (date tuple, time tuple)
-        - arrival: SimpleDatetime (date tuple, time tuple)
-        - duration: int (minutes)
-        - plane_type: str
     """
+    try:
+        # Detect version by checking for 'flights' attribute (v3.0rc0) vs its absence (v2.2)
+        has_segments = hasattr(flight, 'flights') and getattr(flight, 'flights', None)
+
+        if has_segments:
+            # v3.0rc0 structure - detailed segments
+            return _flight_to_dict_v3(flight, compact, origin, destination)
+        else:
+            # v2.2 structure - simpler format
+            return _flight_to_dict_v2(flight, compact)
+
+    except Exception as e:
+        # Fallback: return whatever we can extract
+        log_error("flight_to_dict", type(e).__name__, f"Error converting flight: {str(e)}")
+        return {
+            "error": f"Failed to parse flight data: {str(e)}",
+            "raw_data": str(flight)
+        }
+
+
+def _flight_to_dict_v2(flight, compact=False):
+    """Handle fast-flights v2.2 Flight objects (simpler structure)."""
+    try:
+        price = getattr(flight, 'price', None)
+        airline_name = getattr(flight, 'name', None)
+        is_best = getattr(flight, 'is_best', False)
+        departure = getattr(flight, 'departure', None)
+        arrival = getattr(flight, 'arrival', None)
+        duration = getattr(flight, 'duration', None)
+        stops = getattr(flight, 'stops', None)
+
+        # Format duration if it's a number
+        if isinstance(duration, (int, float)):
+            formatted_duration = format_duration(int(duration))
+        else:
+            formatted_duration = str(duration) if duration else None
+
+        if compact:
+            return {
+                "price": price,
+                "airlines": airline_name,
+                "departure_time": str(departure) if departure else None,
+                "arrival_time": str(arrival) if arrival else None,
+                "duration": formatted_duration,
+                "stops": stops,
+                "is_best": is_best,
+            }
+        else:
+            return {
+                "price": price,
+                "airlines": airline_name,
+                "is_best": is_best,
+                "departure_time": str(departure) if departure else None,
+                "arrival_time": str(arrival) if arrival else None,
+                "total_duration": formatted_duration,
+                "stops": stops,
+                "flight_type": "Unknown",  # v2.2 doesn't expose this
+                "segments": [],  # v2.2 doesn't expose detailed segments
+                "note": "Detailed segment information not available in fast-flights v2.2. Upgrade to v3.x for detailed segments."
+            }
+    except Exception as e:
+        log_error("_flight_to_dict_v2", type(e).__name__, str(e))
+        return {"error": f"Failed to parse v2.2 flight: {str(e)}"}
+
+
+def _flight_to_dict_v3(flight, compact=False, origin=None, destination=None):
+    """Handle fast-flights v3.0rc0 Flights objects (detailed structure)."""
     try:
         # Extract basic info
         price = getattr(flight, 'price', None)
