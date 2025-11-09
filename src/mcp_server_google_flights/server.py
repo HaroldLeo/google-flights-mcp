@@ -121,12 +121,14 @@ def format_duration(minutes):
     else:
         return f"{mins}m"
 
-def flight_to_dict(flight, compact=False):
+def flight_to_dict(flight, compact=False, origin=None, destination=None):
     """Converts a Flights object to a dictionary with detailed flight information.
 
     Args:
         flight: Flights object from fast-flights 3.0rc0
         compact: If True, return only essential fields (saves ~40% tokens)
+        origin: Optional origin airport code for round-trip leg detection
+        destination: Optional destination airport code for round-trip leg detection
 
     The Flights object structure (fast-flights 3.0rc0):
         - type: str - Type of flight
@@ -150,6 +152,7 @@ def flight_to_dict(flight, compact=False):
         airline_names = ', '.join(airlines) if airlines else None
         flight_segments = getattr(flight, 'flights', [])
         flight_type = getattr(flight, 'type', None)
+        is_round_trip = flight_type and 'round' in flight_type.lower()
 
         # Calculate stops (number of segments - 1)
         num_stops = len(flight_segments) - 1 if flight_segments else 0
@@ -200,9 +203,28 @@ def flight_to_dict(flight, compact=False):
             # Full mode: detailed information
             # Build detailed segment information
             segments = []
+
+            # For round-trips, detect the "turn-around" point to label outbound vs return
+            turn_around_index = None
+            if is_round_trip and len(flight_segments) >= 2 and destination:
+                # Find where we reach the destination and start heading back
+                for i, segment in enumerate(flight_segments):
+                    to_airport = getattr(segment, 'to_airport', None)
+                    to_code = getattr(to_airport, 'code', None) if to_airport else None
+
+                    # Check if this segment arrives at the destination
+                    if to_code and to_code.upper() == destination.upper():
+                        turn_around_index = i + 1  # Next segment starts the return
+                        break
+
             for i, segment in enumerate(flight_segments):
                 from_airport = getattr(segment, 'from_airport', None)
                 to_airport = getattr(segment, 'to_airport', None)
+
+                # Determine leg type for round-trips
+                leg_type = None
+                if is_round_trip and turn_around_index is not None:
+                    leg_type = "outbound" if i < turn_around_index else "return"
 
                 segment_info = {
                     "segment_number": i + 1,
@@ -219,6 +241,11 @@ def flight_to_dict(flight, compact=False):
                     "duration": format_duration(getattr(segment, 'duration', 0)),
                     "plane_type": getattr(segment, 'plane_type', None),
                 }
+
+                # Add leg_type for round-trips
+                if leg_type:
+                    segment_info["leg"] = leg_type
+
                 segments.append(segment_info)
 
             return {
@@ -570,6 +597,15 @@ def try_serpapi_fallback(
                     "data_source": "SerpApi (fallback)",
                     "note": "Results from SerpApi due to fast-flights error"
                 }
+
+                # Add warning for round-trip searches
+                if return_date:
+                    output_data["round_trip_note"] = (
+                        "⚠️  SerpApi fallback currently shows outbound flights only. "
+                        "For complete round-trip options with both outbound and return flights, "
+                        "the primary fast-flights method is recommended. "
+                        "Alternatively, search two separate one-way flights for full control."
+                    )
 
                 if not return_cheapest_only and max_results > 0:
                     output_data["result_metadata"] = {
@@ -1382,11 +1418,11 @@ async def search_round_trip_flights(
             # Process flights based on the new parameter
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
+                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode, origin=origin, destination=destination)]
                 result_key = "cheapest_round_trip_option" # Use a specific key for single result
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
+                processed_flights = [flight_to_dict(f, compact=compact_mode, origin=origin, destination=destination) for f in flights_to_process]
                 result_key = "round_trip_options" # Keep original key for list
 
             # Note: The library might return combined round-trip options or separate legs.
