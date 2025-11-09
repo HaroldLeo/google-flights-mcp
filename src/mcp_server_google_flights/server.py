@@ -1165,11 +1165,11 @@ async def search_one_way_flights(
             # Process flights based on the new parameter
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
+                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_flight" # Use a specific key for single result
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f) for f in flights_to_process]
+                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "flights" # Keep original key for list
 
             output_data = {
@@ -1382,11 +1382,11 @@ async def search_round_trip_flights(
             # Process flights based on the new parameter
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
+                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_round_trip_option" # Use a specific key for single result
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f) for f in flights_to_process]
+                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "round_trip_options" # Keep original key for list
 
             # Note: The library might return combined round-trip options or separate legs.
@@ -1825,11 +1825,11 @@ async def get_multi_city_flights(
             log_info(TOOL, f"Found {len(result)} multi-city option(s)")
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
+                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_multi_city_option"
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f) for f in flights_to_process]
+                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "multi_city_options"
 
             output_data = {
@@ -1917,10 +1917,10 @@ async def get_multi_city_flights(
                         # Process based on return_cheapest_only
                         if return_cheapest_only:
                             cheapest = min(segment_flights, key=lambda f: parse_price(f.price))
-                            processed = [flight_to_dict(cheapest, compact_mode=compact_mode)]
+                            processed = [flight_to_dict(cheapest, compact=compact_mode)]
                         else:
                             flights_to_process = segment_flights[:max_results] if max_results > 0 else segment_flights
-                            processed = [flight_to_dict(f, compact_mode=compact_mode) for f in flights_to_process]
+                            processed = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
 
                         segment_results.append({
                             "segment_number": i + 1,
@@ -2093,11 +2093,11 @@ async def search_direct_flights(
             log_info(TOOL, f"Found {len(result)} direct flight(s)")
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
+                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_direct_flight"
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f) for f in flights_to_process]
+                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "direct_flights"
 
             output_data = {
@@ -2280,11 +2280,11 @@ async def search_flights_by_airline(
             log_info(TOOL, f"Found {len(result)} flight(s)")
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
+                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_flight_by_airline"
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f) for f in flights_to_process]
+                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "flights_by_airline"
 
             output_data = {
@@ -2451,11 +2451,11 @@ async def search_flights_with_max_stops(
             log_info(TOOL, f"Found {len(result)} flight(s)")
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact_mode=compact_mode)]
+                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_flight_with_max_stops"
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f) for f in flights_to_process]
+                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "flights_with_max_stops"
 
             output_data = {
