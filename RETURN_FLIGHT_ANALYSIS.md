@@ -216,9 +216,35 @@ If users request the full "select outbound, then select return" flow:
 3. Create new response format for separate leg selection
 4. Update documentation with examples
 
+## Implementation Status
+
+### Fixed Functions ✅
+- **`search_direct_flights`** - Fully fixed with two-leg search workaround
+  - Searches outbound and return legs separately when `is_round_trip=True`
+  - Combines all possible combinations
+  - Returns complete round-trip packages with both legs labeled
+
+### Functions with Same Potential Issue ⚠️
+- **`search_flights_with_max_stops`** - When called with `max_stops=0` and `is_round_trip=True`
+- **`search_flights_by_airline`** - When called with `max_stops=0` and `is_round_trip=True`
+
+**Note:** These functions work correctly when `max_stops > 0`. The issue only occurs when:
+- `max_stops=0` (direct flights only)
+- `is_round_trip=True` (round-trip search)
+- Using fast-flights library
+
+For direct round-trip flights, users should use `search_direct_flights` which has the workaround implemented.
+
+## fast-flights Library Limitation
+
+**Confirmed Issue:** fast-flights 3.0rc0 with `max_stops=0` and `trip="round-trip"` only returns outbound flight segments, not complete round-trip packages.
+
+**Workaround:** Search each leg separately as one-way, then combine results.
+
 ## Notes
 
 - Google Flights website shows separate selection because it's interactive
 - API/scraping tools typically return pre-combined packages for simplicity
 - Most flight search APIs (Skyscanner, Kayak, etc.) work this way
 - Users wanting maximum flexibility should use two one-way searches
+- The library limitation is specific to `max_stops=0` (direct flights) combined with round-trips
