@@ -2090,11 +2090,145 @@ async def search_direct_flights(
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
             log_info(TOOL, f"Direct round-trip {origin}↔{destination} ({date} to {return_date})")
-            flights = [
-                FlightQuery(date=date, from_airport=origin, to_airport=destination),
-                FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
-            ]
-            trip_type = "round-trip"
+
+            # Workaround: fast-flights with max_stops=0 doesn't return complete round-trips
+            # Search each leg separately and combine results
+            log_debug(TOOL, "workaround", "Searching outbound and return legs separately")
+
+            passengers_info = Passengers(
+                adults=adults,
+                children=children,
+                infants_in_seat=infants_in_seat,
+                infants_on_lap=infants_on_lap
+            )
+
+            # Search outbound direct flights
+            log_info(TOOL, "Fetching outbound direct flights...")
+            outbound_query = create_query(
+                flights=[FlightQuery(date=date, from_airport=origin, to_airport=destination)],
+                trip="one-way",
+                seat=seat_type,
+                passengers=passengers_info,
+                max_stops=0
+            )
+            outbound_flights = get_flights(outbound_query)
+
+            # Search return direct flights
+            log_info(TOOL, "Fetching return direct flights...")
+            return_query = create_query(
+                flights=[FlightQuery(date=return_date, from_airport=destination, to_airport=origin)],
+                trip="one-way",
+                seat=seat_type,
+                passengers=passengers_info,
+                max_stops=0
+            )
+            return_flights = get_flights(return_query)
+
+            if not outbound_flights:
+                return json.dumps({
+                    "message": f"No direct outbound flights found for {origin} → {destination} on {date}.",
+                    "search_parameters": {"origin": origin, "destination": destination, "date": date, "max_stops": 0}
+                })
+
+            if not return_flights:
+                return json.dumps({
+                    "message": f"No direct return flights found for {destination} → {origin} on {return_date}.",
+                    "search_parameters": {"origin": destination, "destination": origin, "date": return_date, "max_stops": 0}
+                })
+
+            # Generate booking URL for round-trip
+            round_trip_query = create_query(
+                flights=[
+                    FlightQuery(date=date, from_airport=origin, to_airport=destination),
+                    FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
+                ],
+                trip="round-trip",
+                seat=seat_type,
+                passengers=passengers_info,
+                max_stops=0
+            )
+            google_flights_url = f"https://www.google.com/travel/flights?tfs={round_trip_query}&hl=&curr="
+
+            # Combine outbound and return into complete round-trip packages
+            log_info(TOOL, f"Combining {len(outbound_flights)} outbound × {len(return_flights)} return = {len(outbound_flights) * len(return_flights)} combinations")
+
+            result = []
+            for outbound in outbound_flights:
+                for return_flight in return_flights:
+                    # Create combined round-trip package
+                    combined = {
+                        "outbound": outbound,
+                        "return": return_flight,
+                        "total_price": parse_price(getattr(outbound, 'price', 0)) + parse_price(getattr(return_flight, 'price', 0)),
+                    }
+                    result.append(combined)
+
+            # Sort by total price
+            result.sort(key=lambda x: x["total_price"])
+
+            # Process combined results
+            if return_cheapest_only and result:
+                result = [result[0]]
+            elif max_results > 0:
+                result = result[:max_results]
+
+            # Convert to output format
+            processed_flights = []
+            for combo in result:
+                outbound_dict = flight_to_dict(combo["outbound"], compact=compact_mode, origin=origin, destination=destination)
+                return_dict = flight_to_dict(combo["return"], compact=compact_mode, origin=destination, destination=origin)
+
+                # Extract segments from both legs
+                outbound_segments = outbound_dict.get("segments", [])
+                return_segments = return_dict.get("segments", [])
+
+                # Label segments
+                for seg in outbound_segments:
+                    seg["leg"] = "outbound"
+                for seg in return_segments:
+                    seg["leg"] = "return"
+                    seg["segment_number"] += len(outbound_segments)  # Renumber return segments
+
+                # Combine into single flight package
+                combined_flight = {
+                    "price": combo["total_price"],
+                    "outbound_airlines": outbound_dict.get("airlines"),
+                    "return_airlines": return_dict.get("airlines"),
+                    "flight_type": "Round trip",
+                    "outbound_departure": outbound_dict.get("departure_time"),
+                    "outbound_arrival": outbound_dict.get("arrival_time"),
+                    "return_departure": return_dict.get("departure_time"),
+                    "return_arrival": return_dict.get("arrival_time"),
+                    "total_duration": None,  # Not meaningful for round-trips with days between
+                    "stops": 0,  # Direct flights only
+                    "segments": outbound_segments + return_segments,
+                }
+
+                if not compact_mode:
+                    combined_flight["outbound_carbon_emissions"] = outbound_dict.get("carbon_emissions")
+                    combined_flight["return_carbon_emissions"] = return_dict.get("carbon_emissions")
+
+                processed_flights.append(combined_flight)
+
+            output_data = {
+                "search_parameters": {
+                    "origin": origin,
+                    "destination": destination,
+                    "date": date,
+                    "is_round_trip": is_round_trip,
+                    "return_date": return_date,
+                    "adults": adults,
+                    "children": children,
+                    "seat_type": seat_type,
+                    "max_stops": 0,
+                    "return_cheapest_only": return_cheapest_only
+                },
+                "direct_flights" if not return_cheapest_only else "cheapest_direct_flight": processed_flights,
+                "booking_url": google_flights_url,
+                "note": "Round-trip results show combined outbound + return direct flight packages."
+            }
+            return json.dumps(output_data, indent=2)
+
         else:
             log_info(TOOL, f"Direct one-way {origin}→{destination} on {date}")
             flights = [
@@ -2102,38 +2236,38 @@ async def search_direct_flights(
             ]
             trip_type = "one-way"
 
-        log_debug(TOOL, "constraints", f"max_stops=0 (direct only), seat={seat_type}, adults={adults}")
+            log_debug(TOOL, "constraints", f"max_stops=0 (direct only), seat={seat_type}, adults={adults}")
 
-        passengers_info = Passengers(
-            adults=adults,
-            children=children,
-            infants_in_seat=infants_in_seat,
-            infants_on_lap=infants_on_lap
-        )
+            passengers_info = Passengers(
+                adults=adults,
+                children=children,
+                infants_in_seat=infants_in_seat,
+                infants_on_lap=infants_on_lap
+            )
 
-        log_info(TOOL, "Fetching direct flights from Google Flights...")
-        query = create_query(
-            flights=flights,
-            trip=trip_type,
-            seat=seat_type,
-            passengers=passengers_info,
-            max_stops=0  # Direct flights only
-        )
+            log_info(TOOL, "Fetching direct flights from Google Flights...")
+            query = create_query(
+                flights=flights,
+                trip=trip_type,
+                seat=seat_type,
+                passengers=passengers_info,
+                max_stops=0  # Direct flights only
+            )
 
-        # Generate booking URL for successful responses
-        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
+            # Generate booking URL for successful responses
+            google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
 
-        result = get_flights(query)
+            result = get_flights(query)
 
         if result:
             log_info(TOOL, f"Found {len(result)} direct flight(s)")
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
+                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode, origin=origin, destination=destination)]
                 result_key = "cheapest_direct_flight"
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
+                processed_flights = [flight_to_dict(f, compact=compact_mode, origin=origin, destination=destination) for f in flights_to_process]
                 result_key = "direct_flights"
 
             output_data = {
