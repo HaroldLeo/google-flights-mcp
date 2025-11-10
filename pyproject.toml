@@ -27,7 +27,7 @@ classifiers = [
 
 dependencies = [
     "mcp>=1.2.0",
-    "fast-flights==3.0rc0",
+    "fast-flights==2.2",
     "google-search-results>=2.4.2",
 ]
 

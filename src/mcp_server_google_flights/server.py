@@ -7,12 +7,12 @@ import sys
 import os
 from typing import Any, Optional, Dict, List
 
-# Import fast_flights from pip package
+# Import fast_flights from pip package (v2.2 API)
 try:
-    from fast_flights import FlightQuery, Passengers, get_flights, create_query
+    from fast_flights import FlightData, Passengers, get_flights
 except ImportError as e:
     print(f"Error importing fast_flights: {e}", file=sys.stderr)
-    print(f"Please install fast_flights: pip install fast-flights", file=sys.stderr)
+    print(f"Please install fast_flights v2.2: pip install fast-flights==2.2", file=sys.stderr)
     sys.exit(1)
 
 # Import SerpApi for fallback (optional)
@@ -1242,8 +1242,8 @@ async def search_one_way_flights(
         # Validate date format
         datetime.datetime.strptime(date, '%Y-%m-%d')
 
-        flights = [
-            FlightQuery(date=date, from_airport=origin, to_airport=destination),
+        flight_data = [
+            FlightData(date=date, from_airport=origin, to_airport=destination),
         ]
         passengers_info = Passengers(
             adults=adults,
@@ -1252,18 +1252,17 @@ async def search_one_way_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights...")
-        query = create_query(
-            flights=flights,
+        log_info(TOOL, "Fetching flights from Google Flights (v2.2 with Playwright fallback)...")
+        result = get_flights(
+            flight_data=flight_data,
             trip="one-way",
             seat=seat_type,
-            passengers=passengers_info
+            passengers=passengers_info,
+            fetch_mode="fallback"  # Enable Playwright fallback for reliability
         )
 
-        # Generate booking URL for successful responses
-        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
-
-        result = get_flights(query)
+        # Generate booking URL (manual construction for v2.2)
+        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}"
 
         if result:
             log_info(TOOL, f"Found {len(result)} flight(s)")
@@ -1458,9 +1457,9 @@ async def search_round_trip_flights(
         datetime.datetime.strptime(departure_date, '%Y-%m-%d')
         datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
-        flights = [
-            FlightQuery(date=departure_date, from_airport=origin, to_airport=destination),
-            FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
+        flight_data = [
+            FlightData(date=departure_date, from_airport=origin, to_airport=destination),
+            FlightData(date=return_date, from_airport=destination, to_airport=origin),
         ]
         passengers_info = Passengers(
             adults=adults,
@@ -1469,19 +1468,18 @@ async def search_round_trip_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights...")
-        query = create_query(
-            flights=flights,
+        log_info(TOOL, "Fetching flights from Google Flights (v2.2 with Playwright)...")
+        result = get_flights(
+            flight_data=flight_data,
             trip="round-trip",
             seat=seat_type,
             passengers=passengers_info,
+            fetch_mode="fallback",  # Enable Playwright fallback
             max_stops=max_stops
         )
 
-        # Generate booking URL for successful responses
-        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
-
-        result = get_flights(query)
+        # Generate booking URL (manual construction for v2.2)
+        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{departure_date}%20to%20{return_date}"
 
         if result:
             log_info(TOOL, f"Found {len(result)} round-trip option(s)")
@@ -2161,10 +2159,11 @@ async def search_direct_flights(
 
             log_info(TOOL, f"Direct round-trip {origin}↔{destination} ({date} to {return_date})")
 
-            # Workaround: fast-flights with max_stops=0 doesn't return complete round-trips
-            # Search each leg separately and combine results
-            log_debug(TOOL, "workaround", "Searching outbound and return legs separately")
-
+            # v2.2: Direct round-trip query - should return REAL Google Flights packages!
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
+                FlightData(date=return_date, from_airport=destination, to_airport=origin),
+            ]
             passengers_info = Passengers(
                 adults=adults,
                 children=children,
@@ -2172,137 +2171,23 @@ async def search_direct_flights(
                 infants_on_lap=infants_on_lap
             )
 
-            # Search outbound direct flights
-            log_info(TOOL, "Fetching outbound direct flights...")
-            outbound_query = create_query(
-                flights=[FlightQuery(date=date, from_airport=origin, to_airport=destination)],
-                trip="one-way",
-                seat=seat_type,
-                passengers=passengers_info,
-                max_stops=0
-            )
-            outbound_flights = get_flights(outbound_query)
-
-            # Search return direct flights
-            log_info(TOOL, "Fetching return direct flights...")
-            return_query = create_query(
-                flights=[FlightQuery(date=return_date, from_airport=destination, to_airport=origin)],
-                trip="one-way",
-                seat=seat_type,
-                passengers=passengers_info,
-                max_stops=0
-            )
-            return_flights = get_flights(return_query)
-
-            if not outbound_flights:
-                return json.dumps({
-                    "message": f"No direct outbound flights found for {origin} → {destination} on {date}.",
-                    "search_parameters": {"origin": origin, "destination": destination, "date": date, "max_stops": 0}
-                })
-
-            if not return_flights:
-                return json.dumps({
-                    "message": f"No direct return flights found for {destination} → {origin} on {return_date}.",
-                    "search_parameters": {"origin": destination, "destination": origin, "date": return_date, "max_stops": 0}
-                })
-
-            # Generate booking URL for round-trip
-            round_trip_query = create_query(
-                flights=[
-                    FlightQuery(date=date, from_airport=origin, to_airport=destination),
-                    FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
-                ],
+            log_info(TOOL, "Fetching direct round-trip flights from Google Flights (v2.2)...")
+            result = get_flights(
+                flight_data=flight_data,
                 trip="round-trip",
                 seat=seat_type,
                 passengers=passengers_info,
-                max_stops=0
+                fetch_mode="fallback",  # Playwright fallback
+                max_stops=0  # Direct only
             )
-            google_flights_url = f"https://www.google.com/travel/flights?tfs={round_trip_query}&hl=&curr="
 
-            # Combine outbound and return into complete round-trip packages
-            log_info(TOOL, f"Combining {len(outbound_flights)} outbound × {len(return_flights)} return = {len(outbound_flights) * len(return_flights)} combinations")
-
-            result = []
-            for outbound in outbound_flights:
-                for return_flight in return_flights:
-                    # Create combined round-trip package
-                    combined = {
-                        "outbound": outbound,
-                        "return": return_flight,
-                        "total_price": parse_price(getattr(outbound, 'price', 0)) + parse_price(getattr(return_flight, 'price', 0)),
-                    }
-                    result.append(combined)
-
-            # Sort by total price
-            result.sort(key=lambda x: x["total_price"])
-
-            # Process combined results
-            if return_cheapest_only and result:
-                result = [result[0]]
-            elif max_results > 0:
-                result = result[:max_results]
-
-            # Convert to output format
-            processed_flights = []
-            for combo in result:
-                outbound_dict = flight_to_dict(combo["outbound"], compact=compact_mode, origin=origin, destination=destination)
-                return_dict = flight_to_dict(combo["return"], compact=compact_mode, origin=destination, destination=origin)
-
-                # Extract segments from both legs
-                outbound_segments = outbound_dict.get("segments", [])
-                return_segments = return_dict.get("segments", [])
-
-                # Label segments
-                for seg in outbound_segments:
-                    seg["leg"] = "outbound"
-                for seg in return_segments:
-                    seg["leg"] = "return"
-                    seg["segment_number"] += len(outbound_segments)  # Renumber return segments
-
-                # Combine into single flight package
-                combined_flight = {
-                    "price": combo["total_price"],
-                    "outbound_airlines": outbound_dict.get("airlines"),
-                    "return_airlines": return_dict.get("airlines"),
-                    "flight_type": "Round trip",
-                    "outbound_departure": outbound_dict.get("departure_time"),
-                    "outbound_arrival": outbound_dict.get("arrival_time"),
-                    "return_departure": return_dict.get("departure_time"),
-                    "return_arrival": return_dict.get("arrival_time"),
-                    "total_duration": None,  # Not meaningful for round-trips with days between
-                    "stops": 0,  # Direct flights only
-                    "segments": outbound_segments + return_segments,
-                }
-
-                if not compact_mode:
-                    combined_flight["outbound_carbon_emissions"] = outbound_dict.get("carbon_emissions")
-                    combined_flight["return_carbon_emissions"] = return_dict.get("carbon_emissions")
-
-                processed_flights.append(combined_flight)
-
-            output_data = {
-                "search_parameters": {
-                    "origin": origin,
-                    "destination": destination,
-                    "date": date,
-                    "is_round_trip": is_round_trip,
-                    "return_date": return_date,
-                    "adults": adults,
-                    "children": children,
-                    "seat_type": seat_type,
-                    "max_stops": 0,
-                    "return_cheapest_only": return_cheapest_only
-                },
-                "direct_flights" if not return_cheapest_only else "cheapest_direct_flight": processed_flights,
-                "booking_url": google_flights_url,
-                "note": "Round-trip results show combined outbound + return direct flight packages."
-            }
-            return json.dumps(output_data, indent=2)
+            # Generate booking URL
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{date}%20to%20{return_date}%20direct"
 
         else:
             log_info(TOOL, f"Direct one-way {origin}→{destination} on {date}")
-            flights = [
-                FlightQuery(date=date, from_airport=origin, to_airport=destination),
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
             ]
             trip_type = "one-way"
 
@@ -2315,19 +2200,18 @@ async def search_direct_flights(
                 infants_on_lap=infants_on_lap
             )
 
-            log_info(TOOL, "Fetching direct flights from Google Flights...")
-            query = create_query(
-                flights=flights,
-                trip=trip_type,
+            log_info(TOOL, "Fetching direct flights from Google Flights (v2.2)...")
+            result = get_flights(
+                flight_data=flight_data,
+                trip="one-way",
                 seat=seat_type,
                 passengers=passengers_info,
+                fetch_mode="fallback",  # Playwright fallback
                 max_stops=0  # Direct flights only
             )
 
-            # Generate booking URL for successful responses
-            google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
-
-            result = get_flights(query)
+            # Generate booking URL
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20direct"
 
         if result:
             log_info(TOOL, f"Found {len(result)} direct flight(s)")
