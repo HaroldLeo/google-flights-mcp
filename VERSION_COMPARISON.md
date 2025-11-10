@@ -1,5 +1,61 @@
 # fast-flights Version Comparison: 2.2 vs 3.0rc0 vs GitHub Main
 
+## 🚨 CRITICAL: API Incompatibility Between Versions
+
+**BREAKING CHANGE ALERT:** v2.2 and v3.0rc0 have **completely different APIs** that are NOT compatible!
+
+### v2.2 API
+```python
+from fast_flights import FlightData, Passengers, get_flights
+
+result = get_flights(
+    flight_data=[FlightData(date="2025-12-15", from_airport="SFO", to_airport="LAX")],
+    trip="one-way",
+    passengers=Passengers(adults=1),
+    seat="economy",
+    fetch_mode="common",  # Supports: common/fallback/force-fallback/local
+    max_stops=None
+)
+```
+
+### v3.0rc0 API
+```python
+from fast_flights import FlightQuery, Passengers, create_query, get_flights
+
+flights = [FlightQuery(date="2025-12-15", from_airport="SFO", to_airport="LAX")]
+query = create_query(flights=flights, trip="one-way", seat="economy", passengers=Passengers(adults=1))
+result = get_flights(query)  # Takes query string, not parameters
+```
+
+### Key API Differences
+
+| Component | v2.2 | v3.0rc0 |
+|-----------|------|---------|
+| **Flight definition** | `FlightData` | `FlightQuery` |
+| **Import names** | `FlightData` | `FlightQuery` |
+| **Query method** | Direct `get_flights()` call | `create_query()` → `get_flights()` |
+| **Query parameter** | Named parameters | Query string |
+| **`fetch_mode`** | ✅ Available | ❌ Not available |
+| **`create_query()` function** | ❌ Doesn't exist | ✅ Required |
+
+### Migration Impact
+
+**Downgrading to v2.2 requires rewriting ALL search functions:**
+- Every `create_query()` call must be replaced
+- Every `FlightQuery` → `FlightData`
+- Every `get_flights(query)` → `get_flights(flight_data=..., trip=..., ...)`
+- Estimated: **~500 lines of code changes across 10+ functions**
+
+### Why This Happened
+
+The v3.0 rewrite changed the entire API architecture:
+- v2.2: Direct function calls with named parameters
+- v3.0rc0: Query string generation (similar to Google Flights URL encoding)
+
+This is why v3.0rc0 is a "release candidate" - it's a major API overhaul.
+
+---
+
 ## Executive Summary
 
 **CRITICAL FINDING:** Version 3.0rc0 (currently used) is an **incomplete early release candidate** that's **missing significant features** compared to both version 2.2 AND the GitHub main branch.
@@ -170,35 +226,60 @@ This strongly suggests **3.0rc0 was pushed to PyPI prematurely**.
 
 ---
 
-## Recommendations
+## Recommendations (UPDATED: API Incompatibility Discovered)
 
-### Option 1: Switch to Version 2.2 (Stable) ⭐ RECOMMENDED
+### Option 1: Stay on Version 3.0rc0 ⭐ RECOMMENDED (CHANGED)
+
+**Why this changed:** API incompatibility makes downgrading to v2.2 require massive code rewrite (~500 lines).
 
 **Pros:**
-- ✅ Stable, proven in production
-- ✅ Playwright fallback for reliability
-- ✅ All scraping features work
-- ✅ No unexpected bugs
+- ✅ No code changes needed - everything already works
+- ✅ Better data structure (detailed segments, carbon data)
+- ✅ Our workarounds fix the bugs (direct round-trip, return flights)
+- ✅ SerpApi fallback compensates for missing Playwright
 
 **Cons:**
-- ❌ Older data structure (less detailed segments)
-- ❌ No carbon emissions data
-- ❌ Requires code changes to adapt
+- ❌ No Playwright fallback (must rely on SerpApi)
+- ❌ No `is_best` flag
+- ❌ No `fetch_mode` parameter
+- ❌ Incomplete release
 
-**Migration Effort:** Medium - need to update `flight_to_dict()` to handle old structure
+**Migration Effort:** None - just revert pyproject.toml to v3.0rc0
 
 ---
 
-### Option 2: Switch to GitHub Main Branch
+### Option 2: Downgrade to Version 2.2 (NOT RECOMMENDED)
+
+**Why not recommended:** Requires massive API rewrite.
+
+**Pros:**
+- ✅ Playwright fallback for reliability
+- ✅ `fetch_mode` parameter
+- ✅ `is_best` flag
+- ✅ Stable, production-ready
+
+**Cons:**
+- ❌ **MASSIVE code rewrite required (~500 lines)**
+- ❌ Different API: `FlightData` vs `FlightQuery`
+- ❌ No `create_query()` function
+- ❌ All search functions must be rewritten
+- ❌ High risk of introducing bugs
+
+**Migration Effort:** Very High - rewrite all search functions
+
+---
+
+### Option 3: Switch to GitHub Main Branch
 
 ```bash
 pip install git+https://github.com/AWeirdDev/flights.git
 ```
 
 **Pros:**
-- ✅ Best of both worlds (new structure + Playwright)
+- ✅ Best of both worlds (v3.0rc0 API + Playwright)
 - ✅ Latest bug fixes
 - ✅ All features
+- ✅ No code changes needed
 
 **Cons:**
 - ❌ Unstable, development version
@@ -210,7 +291,7 @@ pip install git+https://github.com/AWeirdDev/flights.git
 
 ---
 
-### Option 3: Stay with 3.0rc0 (Current)
+### Option 4: Wait for Official 3.0 Stable (Previously Option 4)
 
 **Pros:**
 - ✅ No migration needed
