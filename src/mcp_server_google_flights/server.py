@@ -1755,18 +1755,23 @@ async def search_round_trips_in_date_range(
             log_info(TOOL, f"Progress: {count}/{total_combinations} - {depart_date.strftime('%Y-%m-%d')}→{return_date.strftime('%Y-%m-%d')}")
 
         try:
-            flights = [
-                FlightQuery(date=depart_date.strftime('%Y-%m-%d'), from_airport=origin, to_airport=destination),
-                FlightQuery(date=return_date.strftime('%Y-%m-%d'), from_airport=destination, to_airport=origin),
+            flight_data = [
+                FlightData(date=depart_date.strftime('%Y-%m-%d'), from_airport=origin, to_airport=destination),
+                FlightData(date=return_date.strftime('%Y-%m-%d'), from_airport=destination, to_airport=origin),
             ]
             passengers_info = Passengers(adults=adults)
 
-            query = create_query(flights=flights, trip="round-trip", seat=seat_type, passengers=passengers_info, max_stops=max_stops)
+            result = get_flights(
+                flight_data=flight_data,
+                trip="round-trip",
+                seat=seat_type,
+                passengers=passengers_info,
+                fetch_mode="fallback",
+                max_stops=max_stops
+            )
 
             # Generate booking URL for this date pair
-            date_pair_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
-
-            result = get_flights(query)
+            date_pair_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{depart_date.strftime('%Y-%m-%d')}%20to%20{return_date.strftime('%Y-%m-%d')}"
 
             # Collect results based on mode
             if result:
@@ -1907,23 +1912,23 @@ async def get_multi_city_flights(
                 return json.dumps({"error": {"message": f"Invalid date format in segment {i}: '{segment['date']}'. Use YYYY-MM-DD.", "type": "ValueError"}})
 
             flights.append(
-                FlightQuery(date=segment["date"], from_airport=segment["from"], to_airport=segment["to"])
+                FlightData(date=segment["date"], from_airport=segment["from"], to_airport=segment["to"])
             )
 
         passengers_info = Passengers(adults=adults)
 
-        log_info(TOOL, "Fetching flights from Google Flights...")
-        query = create_query(
-            flights=flights,
+        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
+        result = get_flights(
+            flight_data=flights,
             trip="multi-city",
             seat=seat_type,
-            passengers=passengers_info
+            passengers=passengers_info,
+            fetch_mode="fallback"
         )
 
         # Extract URL for fallback (multi-city parsing often fails in fast-flights)
-        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
-
-        result = get_flights(query)
+        route_str = "%20to%20".join([f"{s['from']}" for s in segments] + [segments[-1]['to']])
+        google_flights_url = f"https://www.google.com/travel/flights/search?q=multi-city%20{route_str}"
 
         if result:
             log_info(TOOL, f"Found {len(result)} multi-city option(s)")
@@ -1998,22 +2003,22 @@ async def get_multi_city_flights(
                     log_info(TOOL, f"Searching segment {i+1}/{len(segments)}: {segment['from']}→{segment['to']} on {segment['date']}")
 
                     # Create query for this individual segment
-                    segment_flight = [FlightQuery(
+                    segment_flight_data = [FlightData(
                         date=segment["date"],
                         from_airport=segment["from"],
                         to_airport=segment["to"]
                     )]
                     passengers_info = Passengers(adults=adults)
 
-                    segment_query = create_query(
-                        flights=segment_flight,
+                    segment_flights = get_flights(
+                        flight_data=segment_flight_data,
                         trip="one-way",
                         seat=seat_type,
-                        passengers=passengers_info
+                        passengers=passengers_info,
+                        fetch_mode="fallback"
                     )
 
-                    segment_url = f"https://www.google.com/travel/flights?tfs={segment_query}&hl=&curr="
-                    segment_flights = get_flights(segment_query)
+                    segment_url = f"https://www.google.com/travel/flights/search?q={segment['from']}%20to%20{segment['to']}%20on%20{segment['date']}"
 
                     if segment_flights:
                         log_info(TOOL, f"Found {len(segment_flights)} flight(s) for segment {i+1}")
@@ -2372,33 +2377,35 @@ async def search_flights_by_airline(
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
             log_debug(TOOL, "dates", f"{date} to {return_date}")
 
-            flights = [
-                FlightQuery(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
-                FlightQuery(date=return_date, from_airport=destination, to_airport=origin, airlines=airlines_list),
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
+                FlightData(date=return_date, from_airport=destination, to_airport=origin, airlines=airlines_list),
             ]
             trip_type = "round-trip"
         else:
             log_debug(TOOL, "date", date)
-            flights = [
-                FlightQuery(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
             ]
             trip_type = "one-way"
 
         passengers_info = Passengers(adults=adults)
 
-        log_info(TOOL, "Fetching flights from Google Flights...")
-        query = create_query(
-            flights=flights,
+        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
+        result = get_flights(
+            flight_data=flight_data,
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
+            fetch_mode="fallback",
             max_stops=max_stops
         )
 
-        # Generate booking URL for successful responses
-        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
-
-        result = get_flights(query)
+        # Generate booking URL
+        if is_round_trip:
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{date}%20to%20{return_date}%20airlines%20{','.join(airlines_list)}"
+        else:
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20airlines%20{','.join(airlines_list)}"
 
         if result:
             log_info(TOOL, f"Found {len(result)} flight(s)")
@@ -2543,33 +2550,35 @@ async def search_flights_with_max_stops(
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
             log_info(TOOL, f"Round-trip {origin}↔{destination} with ≤{max_stops} stops ({date} to {return_date})")
-            flights = [
-                FlightQuery(date=date, from_airport=origin, to_airport=destination),
-                FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
+                FlightData(date=return_date, from_airport=destination, to_airport=origin),
             ]
             trip_type = "round-trip"
         else:
             log_info(TOOL, f"One-way {origin}→{destination} with ≤{max_stops} stops on {date}")
-            flights = [
-                FlightQuery(date=date, from_airport=origin, to_airport=destination),
+            flight_data = [
+                FlightData(date=date, from_airport=origin, to_airport=destination),
             ]
             trip_type = "one-way"
 
         passengers_info = Passengers(adults=adults)
 
-        log_info(TOOL, "Fetching flights from Google Flights...")
-        query = create_query(
-            flights=flights,
+        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
+        result = get_flights(
+            flight_data=flight_data,
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
+            fetch_mode="fallback",
             max_stops=max_stops
         )
 
-        # Generate booking URL for successful responses
-        google_flights_url = f"https://www.google.com/travel/flights?tfs={query}&hl=&curr="
-
-        result = get_flights(query)
+        # Generate booking URL
+        if is_round_trip:
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{date}%20to%20{return_date}%20max_stops%20{max_stops}"
+        else:
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20max_stops%20{max_stops}"
 
         if result:
             log_info(TOOL, f"Found {len(result)} flight(s)")
