@@ -31,6 +31,13 @@ dependencies = [
     "google-search-results>=2.4.2",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.11.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/HaroldLeo/google-flights-mcp"
 Repository = "https://github.com/HaroldLeo/google-flights-mcp"
@@ -41,3 +48,10 @@ mcp-server-google-flights = "mcp_server_google_flights:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_server_google_flights"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
