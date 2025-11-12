@@ -976,7 +976,7 @@ def loyalty_program_optimizer() -> str:
 
 **Result:** I'll find flights on your preferred airline/alliance, show you the best mileage-earning options, and provide strategies to maximize your loyalty benefits.
 
-NOTE: Now with fast-flights 3.0, airline filtering is native and more reliable. All searches show price context (low/typical/high) to help you decide if it's a good time to book!"""
+NOTE: Now with fast-flights 2.2, airline filtering is native and more reliable. All searches show price context (low/typical/high) to help you decide if it's a good time to book!"""
 
 
 @mcp.prompt()
@@ -1120,7 +1120,7 @@ def reliable_search_strategy() -> str:
 
 ## 🎯 Choose Your Fetch Mode
 
-NOTE: The fast-flights 3.0 API has been simplified and no longer requires fetch_mode configuration.
+NOTE: The fast-flights 2.2 API has been simplified and no longer requires fetch_mode configuration.
 ## 🔧 Troubleshooting Guide
 
 ### Problem: "No flights found" or Empty Results
@@ -1147,10 +1147,10 @@ NOTE: The fast-flights 3.0 API has been simplified and no longer requires fetch_
 4. **Reduce max_stops** - fewer options = faster searches
 5. **Check price_tier in results** - know if it's a good deal!
 
-## 📊 New Features (v3.0)
+## 📊 New Features (v2.2)
 
 - **Price Context**: Every search now shows if prices are "low", "typical", or "high"
-- **Native Airline Filtering**: Built into fast-flights 3.0, more reliable than before
+- **Native Airline Filtering**: Built into fast-flights 2.2, more reliable than before
 - **Better Error Messages**: More helpful guidance when searches fail
 
 **What's your issue? Let me help you find the best solution!**"""

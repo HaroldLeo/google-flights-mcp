@@ -99,7 +99,7 @@ Built on the powerful `fast-flights` library, this server provides 10 specialize
 - **Date intelligence**: Search by date ranges, relative dates, or flexible months
 - **SerpApi Fallback**: 🆕 Automatic fallback to SerpApi when scraping fails (optional, requires API key)
 - **Price context indicators**: 🆕 Know if prices are "low", "typical", or "high"
-- **Native airline filtering**: 🆕 Powered by fast-flights 3.0rc0 for reliable results
+- **Native airline filtering**: 🆕 Powered by fast-flights 2.2 for reliable results
 - **Multiple fetch modes**: 🆕 Choose reliability vs speed (common/fallback/force-fallback/local/bright-data)
 - **Token-efficient modes**: 🆕 Compact mode (save ~40% tokens)
 - **Result limiting**: 🆕 `max_results` parameter prevents token overload
