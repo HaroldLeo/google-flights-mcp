@@ -1252,13 +1252,13 @@ async def search_one_way_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2 with Playwright fallback)...")
+        log_info(TOOL, "Fetching flights from Google Flights (v2.2 with local Playwright)...")
         result = get_flights(
             flight_data=flight_data,
             trip="one-way",
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="fallback"  # Enable Playwright fallback for reliability
+            fetch_mode="local"  # Use local Playwright to avoid auth issues
         )
 
         # Generate booking URL (manual construction for v2.2)
@@ -1468,13 +1468,13 @@ async def search_round_trip_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2 with Playwright)...")
+        log_info(TOOL, "Fetching flights from Google Flights (v2.2 with local Playwright)...")
         result = get_flights(
             flight_data=flight_data,
             trip="round-trip",
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="fallback",  # Enable Playwright fallback
+            fetch_mode="local",  # Use local Playwright to avoid auth issues
             max_stops=max_stops
         )
 
@@ -1766,7 +1766,7 @@ async def search_round_trips_in_date_range(
                 trip="round-trip",
                 seat=seat_type,
                 passengers=passengers_info,
-                fetch_mode="fallback",
+                fetch_mode="local",
                 max_stops=max_stops
             )
 
@@ -1923,7 +1923,7 @@ async def get_multi_city_flights(
             trip="multi-city",
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="fallback"
+            fetch_mode="local"
         )
 
         # Extract URL for fallback (multi-city parsing often fails in fast-flights)
@@ -2015,7 +2015,7 @@ async def get_multi_city_flights(
                         trip="one-way",
                         seat=seat_type,
                         passengers=passengers_info,
-                        fetch_mode="fallback"
+                        fetch_mode="local"
                     )
 
                     segment_url = f"https://www.google.com/travel/flights/search?q={segment['from']}%20to%20{segment['to']}%20on%20{segment['date']}"
@@ -2182,7 +2182,7 @@ async def search_direct_flights(
                 trip="round-trip",
                 seat=seat_type,
                 passengers=passengers_info,
-                fetch_mode="fallback",  # Playwright fallback
+                fetch_mode="local",  # Use local Playwright to avoid auth issues
                 max_stops=0  # Direct only
             )
 
@@ -2211,7 +2211,7 @@ async def search_direct_flights(
                 trip="one-way",
                 seat=seat_type,
                 passengers=passengers_info,
-                fetch_mode="fallback",  # Playwright fallback
+                fetch_mode="local",  # Use local Playwright to avoid auth issues
                 max_stops=0  # Direct flights only
             )
 
@@ -2397,7 +2397,7 @@ async def search_flights_by_airline(
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="fallback",
+            fetch_mode="local",
             max_stops=max_stops
         )
 
@@ -2570,7 +2570,7 @@ async def search_flights_with_max_stops(
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="fallback",
+            fetch_mode="local",
             max_stops=max_stops
         )
 

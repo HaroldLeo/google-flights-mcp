@@ -132,10 +132,12 @@ pip install mcp-server-google-flights
 pipx install mcp-server-google-flights
 ```
 
-After installation, you'll need to install Playwright browsers:
+After installation, you'll need to install Playwright browsers (required for flight scraping):
 ```bash
 playwright install
 ```
+
+**Note:** This server uses local Playwright for reliable flight data scraping. The Playwright installation is mandatory for the server to function correctly.
 
 #### Option 2: Install from Source
 
@@ -151,9 +153,11 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 # Install in development mode
 pip install -e .
 
-# Install Playwright browsers (required)
+# Install Playwright browsers (required for flight scraping)
 playwright install
 ```
+
+**Important:** The server uses local Playwright to scrape Google Flights data. You must run `playwright install` after installation, otherwise all flight searches will fail.
 
 ### Test the Server
 
@@ -596,6 +600,26 @@ playwright install
 # If that fails, try with dependencies
 playwright install --with-deps
 ```
+
+---
+
+#### 401 Authentication Error with Playwright
+
+**Problem:** Error message: `401 Result: {"error":"no token provided"}` or `https://try.playwright.tech/service/control/run 401`
+
+**Root Cause:** The remote Playwright service (try.playwright.tech) now requires authentication. This server has been updated to use local Playwright instead.
+
+**Solution:**
+1. Make sure you're using the latest version of this package
+2. Install Playwright browsers locally:
+   ```bash
+   playwright install
+   ```
+3. The server now uses `fetch_mode="local"` by default, which runs Playwright locally on your machine instead of using the remote service
+
+**Note:** If you see this error, it means either:
+- Playwright browsers are not installed (run `playwright install`)
+- You're using an older version of the package (update to latest)
 
 ---
 
