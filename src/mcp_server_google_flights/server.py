@@ -1264,16 +1264,16 @@ async def search_one_way_flights(
         # Generate booking URL (manual construction for v2.2)
         google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}"
 
-        if result:
-            log_info(TOOL, f"Found {len(result)} flight(s)")
+        if result and result.flights:
+            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
 
             # Process flights based on the new parameter
             if return_cheapest_only:
-                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_flight" # Use a specific key for single result
             else:
-                flights_to_process = result[:max_results] if max_results > 0 else result
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
                 processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "flights" # Keep original key for list
 
@@ -1295,9 +1295,9 @@ async def search_one_way_flights(
             # Add result metadata for transparency
             if not return_cheapest_only and max_results > 0:
                 output_data["result_metadata"] = {
-                    "total_found": len(result),
+                    "total_found": len(result.flights),
                     "returned": len(processed_flights),
-                    "truncated": len(result) > max_results
+                    "truncated": len(result.flights) > max_results
                 }
 
             return json.dumps(output_data, indent=2)
@@ -1481,15 +1481,15 @@ async def search_round_trip_flights(
         # Generate booking URL (manual construction for v2.2)
         google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{departure_date}%20to%20{return_date}"
 
-        if result:
-            log_info(TOOL, f"Found {len(result)} round-trip option(s)")
+        if result and result.flights:
+            log_info(TOOL, f"Found {len(result.flights)} round-trip option(s)")
             # Process flights based on the new parameter
             if return_cheapest_only:
-                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode, origin=origin, destination=destination)]
                 result_key = "cheapest_round_trip_option" # Use a specific key for single result
             else:
-                flights_to_process = result[:max_results] if max_results > 0 else result
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
                 processed_flights = [flight_to_dict(f, compact=compact_mode, origin=origin, destination=destination) for f in flights_to_process]
                 result_key = "round_trip_options" # Keep original key for list
 
@@ -1774,10 +1774,10 @@ async def search_round_trips_in_date_range(
             date_pair_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{depart_date.strftime('%Y-%m-%d')}%20to%20{return_date.strftime('%Y-%m-%d')}"
 
             # Collect results based on mode
-            if result:
+            if result and result.flights:
                 if return_cheapest_only:
                     # Find and store only the cheapest for this pair
-                    cheapest_flight_for_pair = min(result, key=lambda f: parse_price(f.price))
+                    cheapest_flight_for_pair = min(result.flights, key=lambda f: parse_price(f.price))
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
@@ -1786,7 +1786,7 @@ async def search_round_trips_in_date_range(
                     })
                 else:
                     # Store all flights for this pair
-                    flights_list = [flight_to_dict(f) for f in result]
+                    flights_list = [flight_to_dict(f) for f in result.flights]
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
@@ -1930,14 +1930,14 @@ async def get_multi_city_flights(
         route_str = "%20to%20".join([f"{s['from']}" for s in segments] + [segments[-1]['to']])
         google_flights_url = f"https://www.google.com/travel/flights/search?q=multi-city%20{route_str}"
 
-        if result:
-            log_info(TOOL, f"Found {len(result)} multi-city option(s)")
+        if result and result.flights:
+            log_info(TOOL, f"Found {len(result.flights)} multi-city option(s)")
             if return_cheapest_only:
-                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_multi_city_option"
             else:
-                flights_to_process = result[:max_results] if max_results > 0 else result
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
                 processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "multi_city_options"
 
@@ -2020,15 +2020,15 @@ async def get_multi_city_flights(
 
                     segment_url = f"https://www.google.com/travel/flights/search?q={segment['from']}%20to%20{segment['to']}%20on%20{segment['date']}"
 
-                    if segment_flights:
-                        log_info(TOOL, f"Found {len(segment_flights)} flight(s) for segment {i+1}")
+                    if segment_flights and segment_flights.flights:
+                        log_info(TOOL, f"Found {len(segment_flights.flights)} flight(s) for segment {i+1}")
 
                         # Process based on return_cheapest_only
                         if return_cheapest_only:
-                            cheapest = min(segment_flights, key=lambda f: parse_price(f.price))
+                            cheapest = min(segment_flights.flights, key=lambda f: parse_price(f.price))
                             processed = [flight_to_dict(cheapest, compact=compact_mode)]
                         else:
-                            flights_to_process = segment_flights[:max_results] if max_results > 0 else segment_flights
+                            flights_to_process = segment_flights.flights[:max_results] if max_results > 0 else segment_flights.flights
                             processed = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
 
                         segment_results.append({
@@ -2218,14 +2218,14 @@ async def search_direct_flights(
             # Generate booking URL
             google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20direct"
 
-        if result:
-            log_info(TOOL, f"Found {len(result)} direct flight(s)")
+        if result and result.flights:
+            log_info(TOOL, f"Found {len(result.flights)} direct flight(s)")
             if return_cheapest_only:
-                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode, origin=origin, destination=destination)]
                 result_key = "cheapest_direct_flight"
             else:
-                flights_to_process = result[:max_results] if max_results > 0 else result
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
                 processed_flights = [flight_to_dict(f, compact=compact_mode, origin=origin, destination=destination) for f in flights_to_process]
                 result_key = "direct_flights"
 
@@ -2407,14 +2407,14 @@ async def search_flights_by_airline(
         else:
             google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20airlines%20{','.join(airlines_list)}"
 
-        if result:
-            log_info(TOOL, f"Found {len(result)} flight(s)")
+        if result and result.flights:
+            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
             if return_cheapest_only:
-                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_flight_by_airline"
             else:
-                flights_to_process = result[:max_results] if max_results > 0 else result
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
                 processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "flights_by_airline"
 
@@ -2580,14 +2580,14 @@ async def search_flights_with_max_stops(
         else:
             google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20max_stops%20{max_stops}"
 
-        if result:
-            log_info(TOOL, f"Found {len(result)} flight(s)")
+        if result and result.flights:
+            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
             if return_cheapest_only:
-                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
                 result_key = "cheapest_flight_with_max_stops"
             else:
-                flights_to_process = result[:max_results] if max_results > 0 else result
+                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
                 processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
                 result_key = "flights_with_max_stops"
 
