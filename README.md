@@ -132,10 +132,7 @@ pip install mcp-server-google-flights
 pipx install mcp-server-google-flights
 ```
 
-After installation, you'll need to install Playwright browsers:
-```bash
-playwright install
-```
+**Note:** This package uses fast-flights v2.2 which handles web scraping automatically without requiring local Playwright installation.
 
 #### Option 2: Install from Source
 
@@ -150,9 +147,6 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Install in development mode
 pip install -e .
-
-# Install Playwright browsers (required)
-playwright install
 ```
 
 ### Test the Server
@@ -581,20 +575,22 @@ airports://heathrow     # Search by name
 
 ---
 
-#### Playwright Browser Error
+#### 401 Authentication Error
 
-**Problem:** Error about missing browser binaries.
+**Problem:** Error message: `401 Result: {"error":"no token provided"}` or `https://try.playwright.tech/service/control/run 401`
+
+**Root Cause:** Older versions of this package used `fetch_mode="fallback"` which relied on a remote Playwright service that now requires authentication.
 
 **Solution:**
+Update to the latest version of this package. The server now uses `fetch_mode="common"` which avoids the remote Playwright service entirely, using standard HTTP requests instead.
+
 ```bash
-# Activate venv first
-source .venv/bin/activate
+# Update the package
+pip install --upgrade mcp-server-google-flights
 
-# Install browsers
-playwright install
-
-# If that fails, try with dependencies
-playwright install --with-deps
+# Or if running from source
+git pull origin main
+pip install -e .
 ```
 
 ---
