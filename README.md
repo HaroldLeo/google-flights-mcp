@@ -132,12 +132,7 @@ pip install mcp-server-google-flights
 pipx install mcp-server-google-flights
 ```
 
-After installation, you'll need to install Playwright browsers (required for flight scraping):
-```bash
-playwright install
-```
-
-**Note:** This server uses local Playwright for reliable flight data scraping. The Playwright installation is mandatory for the server to function correctly.
+**Note:** This package uses fast-flights v2.2 which handles web scraping automatically without requiring local Playwright installation.
 
 #### Option 2: Install from Source
 
@@ -152,12 +147,7 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Install in development mode
 pip install -e .
-
-# Install Playwright browsers (required for flight scraping)
-playwright install
 ```
-
-**Important:** The server uses local Playwright to scrape Google Flights data. You must run `playwright install` after installation, otherwise all flight searches will fail.
 
 ### Test the Server
 
@@ -585,41 +575,23 @@ airports://heathrow     # Search by name
 
 ---
 
-#### Playwright Browser Error
-
-**Problem:** Error about missing browser binaries.
-
-**Solution:**
-```bash
-# Activate venv first
-source .venv/bin/activate
-
-# Install browsers
-playwright install
-
-# If that fails, try with dependencies
-playwright install --with-deps
-```
-
----
-
-#### 401 Authentication Error with Playwright
+#### 401 Authentication Error
 
 **Problem:** Error message: `401 Result: {"error":"no token provided"}` or `https://try.playwright.tech/service/control/run 401`
 
-**Root Cause:** The remote Playwright service (try.playwright.tech) now requires authentication. This server has been updated to use local Playwright instead.
+**Root Cause:** Older versions of this package used `fetch_mode="fallback"` which relied on a remote Playwright service that now requires authentication.
 
 **Solution:**
-1. Make sure you're using the latest version of this package
-2. Install Playwright browsers locally:
-   ```bash
-   playwright install
-   ```
-3. The server now uses `fetch_mode="local"` by default, which runs Playwright locally on your machine instead of using the remote service
+Update to the latest version of this package. The server now uses `fetch_mode="common"` which avoids the remote Playwright service entirely, using standard HTTP requests instead.
 
-**Note:** If you see this error, it means either:
-- Playwright browsers are not installed (run `playwright install`)
-- You're using an older version of the package (update to latest)
+```bash
+# Update the package
+pip install --upgrade mcp-server-google-flights
+
+# Or if running from source
+git pull origin main
+pip install -e .
+```
 
 ---
 

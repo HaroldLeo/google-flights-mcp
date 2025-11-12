@@ -1252,13 +1252,13 @@ async def search_one_way_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2 with local Playwright)...")
+        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
         result = get_flights(
             flight_data=flight_data,
             trip="one-way",
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="local"  # Use local Playwright to avoid auth issues
+            fetch_mode="common"  # Use standard HTTP, avoid remote Playwright auth issues
         )
 
         # Generate booking URL (manual construction for v2.2)
@@ -1468,13 +1468,13 @@ async def search_round_trip_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2 with local Playwright)...")
+        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
         result = get_flights(
             flight_data=flight_data,
             trip="round-trip",
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="local",  # Use local Playwright to avoid auth issues
+            fetch_mode="common",  # Use local Playwright to avoid auth issues
             max_stops=max_stops
         )
 
@@ -1766,7 +1766,7 @@ async def search_round_trips_in_date_range(
                 trip="round-trip",
                 seat=seat_type,
                 passengers=passengers_info,
-                fetch_mode="local",
+                fetch_mode="common",
                 max_stops=max_stops
             )
 
@@ -2182,7 +2182,7 @@ async def search_direct_flights(
                 trip="round-trip",
                 seat=seat_type,
                 passengers=passengers_info,
-                fetch_mode="local",  # Use local Playwright to avoid auth issues
+                fetch_mode="common",  # Use local Playwright to avoid auth issues
                 max_stops=0  # Direct only
             )
 
@@ -2211,7 +2211,7 @@ async def search_direct_flights(
                 trip="one-way",
                 seat=seat_type,
                 passengers=passengers_info,
-                fetch_mode="local",  # Use local Playwright to avoid auth issues
+                fetch_mode="common",  # Use local Playwright to avoid auth issues
                 max_stops=0  # Direct flights only
             )
 
@@ -2378,14 +2378,14 @@ async def search_flights_by_airline(
             log_debug(TOOL, "dates", f"{date} to {return_date}")
 
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
-                FlightData(date=return_date, from_airport=destination, to_airport=origin, airlines=airlines_list),
+                FlightData(date=date, from_airport=origin, to_airport=destination),
+                FlightData(date=return_date, from_airport=destination, to_airport=origin),
             ]
             trip_type = "round-trip"
         else:
             log_debug(TOOL, "date", date)
             flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination, airlines=airlines_list),
+                FlightData(date=date, from_airport=origin, to_airport=destination),
             ]
             trip_type = "one-way"
 
@@ -2397,7 +2397,7 @@ async def search_flights_by_airline(
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="local",
+            fetch_mode="common",
             max_stops=max_stops
         )
 
@@ -2406,6 +2406,22 @@ async def search_flights_by_airline(
             google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{date}%20to%20{return_date}%20airlines%20{','.join(airlines_list)}"
         else:
             google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20airlines%20{','.join(airlines_list)}"
+
+        if result and result.flights:
+            # Filter flights by airline (post-filtering since v2.2 doesn't support airline parameter)
+            log_info(TOOL, f"Filtering {len(result.flights)} flights by airlines: {airlines_list}")
+            filtered_flights = []
+            airlines_upper = [a.upper() for a in airlines_list]
+
+            for flight in result.flights:
+                # Get airline name from the flight object
+                airline_name = getattr(flight, 'name', '').upper()
+                # Check if any of the requested airlines match
+                if any(airline.upper() in airline_name for airline in airlines_list):
+                    filtered_flights.append(flight)
+
+            log_info(TOOL, f"Found {len(filtered_flights)} flights matching specified airlines")
+            result.flights = filtered_flights
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} flight(s)")
@@ -2570,7 +2586,7 @@ async def search_flights_with_max_stops(
             trip=trip_type,
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="local",
+            fetch_mode="common",
             max_stops=max_stops
         )
 
