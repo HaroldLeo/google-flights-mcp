@@ -1118,34 +1118,31 @@ def reliable_search_strategy() -> str:
     """Guide users on choosing the right fetch mode for reliability and handling scraping issues."""
     return """I'll help you choose the best flight search method for your needs and troubleshoot any issues!
 
-## 🎯 Choose Your Fetch Mode
-
-NOTE: The fast-flights 2.2 API has been simplified and no longer requires fetch_mode configuration.
 ## 🔧 Troubleshooting Guide
 
 ### Problem: "No flights found" or Empty Results
-**Try:** `fetch_mode="force-fallback"` or `fetch_mode="local"`
-**Why:** Standard scraping may have missed JavaScript-loaded data
+**Try:** Verify airport codes, date formats, and try broader search parameters
+**Why:** Google Flights may not have availability for specific routes/dates
 
-### Problem: HTTP 401 Errors or Rate Limiting
-**Try:** `fetch_mode="local"` or reduce search frequency
-**Why:** Serverless Playwright has usage limits
+### Problem: HTTP 401 Errors
+**Solution:** Update to the latest version - uses fetch_mode="common" to avoid authentication issues
+**Why:** Older versions used remote Playwright service that requires authentication
 
 ### Problem: Searches Timing Out
-**Try:** `fetch_mode="common"` for faster results, or reduce date ranges
-**Why:** Complex searches take longer
+**Try:** Reduce date ranges, especially for search_round_trips_in_date_range
+**Why:** Large date ranges require many requests and can hit rate limits
 
 ### Problem: Intermittent Failures
-**Try:** `fetch_mode="fallback"` (default) - it auto-retries
-**Why:** Network issues or temporary Google Flights changes
+**Try:** Wait a few minutes and retry - Google may be rate limiting
+**Why:** Too many requests in a short time can trigger rate limiting
 
 ## 💡 Pro Tips
 
-1. **Start with default (fallback)** - it handles most cases
-2. **Use "local" for batch searching** - install Playwright locally
-3. **Add `return_cheapest_only=true`** - faster results, less data
-4. **Reduce max_stops** - fewer options = faster searches
-5. **Check price_tier in results** - know if it's a good deal!
+1. **Use SerpApi for reliability** - Configure SERPAPI_API_KEY for automatic fallback
+2. **Add `return_cheapest_only=true`** - faster results, less data
+3. **Reduce max_stops** - fewer options = faster searches
+4. **Use compact_mode=true** - save ~40% tokens in responses
+5. **Limit results with max_results** - prevent token overload
 
 ## 📊 New Features (v2.2)
 
@@ -1880,6 +1877,9 @@ async def get_multi_city_flights(
     """
     TOOL = "get_multi_city_flights"
 
+    # Initialize google_flights_url early so it's available in all exception handlers
+    google_flights_url = None
+
     try:
         # Parse the flight segments JSON
         segments = json.loads(flight_segments)
@@ -1917,18 +1917,18 @@ async def get_multi_city_flights(
 
         passengers_info = Passengers(adults=adults)
 
+        # Generate URL early so it's available for all code paths
+        route_str = "%20to%20".join([f"{s['from']}" for s in segments] + [segments[-1]['to']])
+        google_flights_url = f"https://www.google.com/travel/flights/search?q=multi-city%20{route_str}"
+
         log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
         result = get_flights(
             flight_data=flights,
             trip="multi-city",
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="local"
+            fetch_mode="common"
         )
-
-        # Extract URL for fallback (multi-city parsing often fails in fast-flights)
-        route_str = "%20to%20".join([f"{s['from']}" for s in segments] + [segments[-1]['to']])
-        google_flights_url = f"https://www.google.com/travel/flights/search?q=multi-city%20{route_str}"
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} multi-city option(s)")
@@ -2015,7 +2015,7 @@ async def get_multi_city_flights(
                         trip="one-way",
                         seat=seat_type,
                         passengers=passengers_info,
-                        fetch_mode="local"
+                        fetch_mode="common"
                     )
 
                     segment_url = f"https://www.google.com/travel/flights/search?q={segment['from']}%20to%20{segment['to']}%20on%20{segment['date']}"
