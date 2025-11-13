@@ -208,7 +208,10 @@ async def search_flights(
         included_airline_codes: Comma-separated airline IATA codes to filter (e.g., "AA,UA,DL")
 
     Returns:
-        JSON string with flight offers including prices, airlines, and itineraries
+        JSON string with flight offers including prices, airlines, and itineraries.
+        The response includes:
+        - 'offers': Simplified summary format for easy reading
+        - 'raw_offers': Complete flight offer data from Amadeus API for use with confirm_flight_price
     """
     try:
         params = {
@@ -258,7 +261,8 @@ async def search_flights(
             },
             "results_count": len(offers),
             "currency": currency_code.upper(),
-            "offers": []
+            "offers": [],
+            "raw_offers": offers[:max_results]  # Include complete raw offers for use with confirm_flight_price
         }
 
         # Extract key information from each offer
@@ -366,21 +370,58 @@ async def confirm_flight_price(flight_offer_data: str) -> str:
     Confirm the pricing of a flight offer before booking.
 
     This validates that the price is still available and provides detailed tax breakdown.
-    Use the flight offer data from search_flights results.
 
-    IMPORTANT: This function automatically removes aircraft codes from the request
-    because the Amadeus pricing API frequently rejects aircraft codes that are
-    returned by the search API (Error 400/477 - "Invalid data format at aircraft field").
-    Aircraft codes are optional for pricing confirmation.
+    IMPORTANT:
+    - Use the COMPLETE raw flight offer from 'raw_offers' field in search_flights results
+    - Do NOT use the simplified 'offers' summary - it's missing required fields
+    - This function automatically removes aircraft codes to prevent API validation errors
+    - The pricing API requires: travelerPricings, source, and segment id fields
+
+    Example usage:
+        search_result = search_flights("JFK", "LAX", "2024-12-15")
+        parsed = json.loads(search_result)
+        first_raw_offer = parsed["raw_offers"][0]  # Use raw_offers, not offers
+        confirm_flight_price(json.dumps(first_raw_offer))
 
     Args:
-        flight_offer_data: JSON string containing the complete flight offer object from search results
+        flight_offer_data: JSON string containing the COMPLETE raw flight offer from
+                          the 'raw_offers' field of search_flights results
 
     Returns:
         JSON string with confirmed pricing and detailed tax information
     """
     try:
         offer = json.loads(flight_offer_data)
+
+        # Validate that this is complete raw offer data, not simplified summary
+        missing_fields = []
+        if "travelerPricings" not in offer:
+            missing_fields.append("travelerPricings")
+        if "source" not in offer:
+            missing_fields.append("source")
+
+        # Check if segments have IDs
+        if "itineraries" in offer:
+            for itin_idx, itin in enumerate(offer["itineraries"]):
+                if "segments" in itin:
+                    for seg_idx, seg in enumerate(itin["segments"]):
+                        if "id" not in seg:
+                            missing_fields.append(f"itineraries[{itin_idx}].segments[{seg_idx}].id")
+                            break
+                    if missing_fields:
+                        break
+
+        if missing_fields:
+            return json.dumps({
+                "error": "Invalid flight offer format - missing required fields for pricing API",
+                "missing_fields": missing_fields,
+                "details": "You are likely passing the simplified 'offers' summary instead of the complete 'raw_offers' data",
+                "solution": "Use the 'raw_offers' field from search_flights results, not the 'offers' field",
+                "example": {
+                    "wrong": "search_result['offers'][0]  # Missing required fields",
+                    "correct": "search_result['raw_offers'][0]  # Complete data with all required fields"
+                }
+            }, indent=2)
 
         # Sanitize the offer data to remove potentially problematic fields
         sanitized_offer = sanitize_flight_offer_for_pricing(offer)
