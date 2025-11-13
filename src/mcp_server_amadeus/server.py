@@ -317,6 +317,45 @@ async def search_flights(
         return json.dumps({"error": str(e)}, indent=2)
 
 
+def sanitize_flight_offer_for_pricing(offer: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sanitize flight offer data for the pricing API.
+
+    The pricing API is more strict than the search API and may reject certain
+    aircraft codes or other fields. This function cleans the data.
+
+    Args:
+        offer: Flight offer dictionary from search results
+
+    Returns:
+        Sanitized flight offer dictionary
+    """
+    # Create a deep copy to avoid modifying the original
+    import copy
+    sanitized = copy.deepcopy(offer)
+
+    # Check and clean aircraft codes in segments
+    if "itineraries" in sanitized:
+        for itinerary in sanitized["itineraries"]:
+            if "segments" in itinerary:
+                for segment in itinerary["segments"]:
+                    # Remove aircraft field if it contains invalid codes
+                    # Invalid codes often have special characters or unusual formats
+                    if "aircraft" in segment and "code" in segment["aircraft"]:
+                        aircraft_code = segment["aircraft"]["code"]
+                        # If aircraft code contains non-alphanumeric characters (except common ones)
+                        # or is in an unusual format, remove it
+                        if aircraft_code and (
+                            len(aircraft_code) > 3 or  # Most valid codes are 3 chars
+                            not aircraft_code.replace("Q", "").replace("X", "").isalnum()  # Contains special chars
+                        ):
+                            # Remove the entire aircraft field to avoid validation errors
+                            log_info("ConfirmPrice", f"Removing potentially invalid aircraft code: {aircraft_code}")
+                            segment.pop("aircraft", None)
+
+    return sanitized
+
+
 @mcp.tool()
 async def confirm_flight_price(flight_offer_data: str) -> str:
     """
@@ -324,6 +363,9 @@ async def confirm_flight_price(flight_offer_data: str) -> str:
 
     This validates that the price is still available and provides detailed tax breakdown.
     Use the flight offer data from search_flights results.
+
+    Note: This function automatically sanitizes flight offer data to remove fields
+    that may cause validation errors (such as invalid aircraft codes).
 
     Args:
         flight_offer_data: JSON string containing the complete flight offer object from search results
@@ -334,10 +376,13 @@ async def confirm_flight_price(flight_offer_data: str) -> str:
     try:
         offer = json.loads(flight_offer_data)
 
+        # Sanitize the offer data to remove potentially problematic fields
+        sanitized_offer = sanitize_flight_offer_for_pricing(offer)
+
         payload = {
             "data": {
                 "type": "flight-offers-pricing",
-                "flightOffers": [offer]
+                "flightOffers": [sanitized_offer]
             }
         }
 
@@ -899,14 +944,37 @@ async def get_hotel_ratings(hotel_ids: str) -> str:
     """
     Get hotel ratings based on sentiment analysis of reviews.
 
+    The API has a limit on the number of hotels that can be queried at once.
+    For best results, query 1-3 hotels at a time.
+
     Args:
         hotel_ids: Comma-separated hotel IDs (e.g., "MCLONGHM,ADNYCCTB")
+                   Maximum recommended: 3 hotels per request
 
     Returns:
         JSON string with hotel sentiment scores and ratings
     """
     try:
-        params = {"hotelIds": hotel_ids.upper()}
+        # Split and validate hotel IDs
+        ids_list = [id.strip().upper() for id in hotel_ids.split(",") if id.strip()]
+
+        if not ids_list:
+            return json.dumps({
+                "error": "No hotel IDs provided. Please provide comma-separated hotel IDs."
+            }, indent=2)
+
+        # Warn if too many hotels
+        if len(ids_list) > 10:
+            return json.dumps({
+                "error": f"Too many hotel IDs ({len(ids_list)}). The API has a limit on the number of hotels that can be queried at once. Please query 10 or fewer hotels per request."
+            }, indent=2)
+
+        if len(ids_list) > 3:
+            log_info("GetHotelRatings", f"Warning: Querying {len(ids_list)} hotels. Some may not be in the database.")
+
+        # Format hotel IDs for the API
+        formatted_ids = ",".join(ids_list)
+        params = {"hotelIds": formatted_ids}
 
         result = await amadeus_request(
             "GET",
@@ -915,7 +983,21 @@ async def get_hotel_ratings(hotel_ids: str) -> str:
             tool_name="GetHotelRatings"
         )
 
-        log_info("GetHotelRatings", f"Retrieved ratings for hotels")
+        # Check if any hotels were found
+        data = result.get("data", [])
+        if not data:
+            return json.dumps({
+                "error": "No ratings found for the provided hotel IDs. This could mean:",
+                "reasons": [
+                    "Hotel IDs are not in the sentiment database",
+                    "Hotel IDs are incorrect or invalid",
+                    "Sentiment data is not available for these hotels"
+                ],
+                "suggestion": "Try using hotel IDs from the search_hotels_by_city or search_hotels_by_location results.",
+                "requested_ids": ids_list
+            }, indent=2)
+
+        log_info("GetHotelRatings", f"Retrieved ratings for {len(data)} out of {len(ids_list)} hotels")
         return json.dumps(result, indent=2)
 
     except Exception as e:
