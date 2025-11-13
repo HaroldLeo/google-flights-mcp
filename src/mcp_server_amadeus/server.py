@@ -321,37 +321,34 @@ def sanitize_flight_offer_for_pricing(offer: Dict[str, Any]) -> Dict[str, Any]:
     """
     Sanitize flight offer data for the pricing API.
 
-    The pricing API is more strict than the search API and may reject certain
-    aircraft codes or other fields. This function cleans the data.
+    The pricing API is more strict than the search API and frequently rejects
+    aircraft codes that are returned by the search API. Since aircraft codes are
+    optional for pricing confirmation, we remove them entirely to avoid errors.
+
+    Common error: 400/477 - "Invalid data format at aircraft field"
 
     Args:
         offer: Flight offer dictionary from search results
 
     Returns:
-        Sanitized flight offer dictionary
+        Sanitized flight offer dictionary with aircraft fields removed
     """
     # Create a deep copy to avoid modifying the original
     import copy
     sanitized = copy.deepcopy(offer)
 
-    # Check and clean aircraft codes in segments
+    # Remove ALL aircraft fields from segments
+    # The pricing API often rejects aircraft codes even when they look valid (e.g., "32Q")
+    # Since aircraft is optional for pricing, safer to remove it entirely
     if "itineraries" in sanitized:
         for itinerary in sanitized["itineraries"]:
             if "segments" in itinerary:
                 for segment in itinerary["segments"]:
-                    # Remove aircraft field if it contains invalid codes
-                    # Invalid codes often have special characters or unusual formats
-                    if "aircraft" in segment and "code" in segment["aircraft"]:
-                        aircraft_code = segment["aircraft"]["code"]
-                        # If aircraft code contains non-alphanumeric characters (except common ones)
-                        # or is in an unusual format, remove it
-                        if aircraft_code and (
-                            len(aircraft_code) > 3 or  # Most valid codes are 3 chars
-                            not aircraft_code.replace("Q", "").replace("X", "").isalnum()  # Contains special chars
-                        ):
-                            # Remove the entire aircraft field to avoid validation errors
-                            log_info("ConfirmPrice", f"Removing potentially invalid aircraft code: {aircraft_code}")
-                            segment.pop("aircraft", None)
+                    # Remove aircraft field entirely to avoid validation errors
+                    if "aircraft" in segment:
+                        aircraft_code = segment.get("aircraft", {}).get("code", "unknown")
+                        log_info("ConfirmPrice", f"Removing aircraft field (code: {aircraft_code}) to prevent API validation errors")
+                        segment.pop("aircraft", None)
 
     return sanitized
 
@@ -364,8 +361,10 @@ async def confirm_flight_price(flight_offer_data: str) -> str:
     This validates that the price is still available and provides detailed tax breakdown.
     Use the flight offer data from search_flights results.
 
-    Note: This function automatically sanitizes flight offer data to remove fields
-    that may cause validation errors (such as invalid aircraft codes).
+    IMPORTANT: This function automatically removes aircraft codes from the request
+    because the Amadeus pricing API frequently rejects aircraft codes that are
+    returned by the search API (Error 400/477 - "Invalid data format at aircraft field").
+    Aircraft codes are optional for pricing confirmation.
 
     Args:
         flight_offer_data: JSON string containing the complete flight offer object from search results
@@ -467,19 +466,25 @@ async def flight_inspiration_search(
 
     Perfect for "Where can I fly from NYC?" type queries.
 
+    IMPORTANT: This API works best with major airport codes (not city codes) and
+    WITHOUT a specific departure date in the test environment.
+
     Args:
-        origin: Origin airport/city IATA code (e.g., "NYC", "JFK")
-        departure_date: Optional departure date in YYYY-MM-DD format
+        origin: Origin AIRPORT IATA code (e.g., "JFK", "LAX", "CDG") - use airport code, not city code
+        departure_date: Optional departure date in YYYY-MM-DD format (leave empty for best results in test environment)
         max_results: Maximum destinations to return, default 10
 
     Returns:
         JSON string with destinations and their cheapest prices
     """
     try:
+        # Note: API parameter is "origin" not "originLocationCode"
         params = {"origin": origin.upper()}
 
+        # Only add departure date if provided (test environment works better without it)
         if departure_date:
             params["departureDate"] = departure_date
+            log_info("FlightInspiration", f"Searching with specific date: {departure_date} (may have limited results in test environment)")
 
         result = await amadeus_request(
             "GET",
@@ -488,11 +493,35 @@ async def flight_inspiration_search(
             tool_name="FlightInspiration"
         )
 
-        destinations = result.get("data", [])[:max_results]
+        destinations = result.get("data", [])
+
+        # Check if we got results
+        if not destinations:
+            # Provide helpful error message for test environment
+            error_response = {
+                "error": "No flight destinations found for this query",
+                "origin": origin.upper(),
+                "possible_reasons": [
+                    "Test environment has limited data for this origin airport",
+                    "Try using a major airport code (JFK, LAX, CDG, LHR, etc.) instead of city codes",
+                    "Remove the departure_date parameter for broader results",
+                    "This route may not have data in the test environment"
+                ],
+                "suggestions": [
+                    "Try a major hub airport: JFK, LAX, LHR, CDG, FRA, DXB, SIN, HKG",
+                    "Use search_flights instead for specific route searches",
+                    "Switch to production environment for complete data coverage"
+                ]
+            }
+            log_error("FlightInspiration", "NoResults", f"No destinations found for origin {origin}")
+            return json.dumps(error_response, indent=2)
+
+        destinations = destinations[:max_results]
 
         summary = {
             "origin": origin.upper(),
             "departure_date": departure_date or "flexible",
+            "results_count": len(destinations),
             "destinations": []
         }
 
@@ -508,6 +537,34 @@ async def flight_inspiration_search(
         log_info("FlightInspiration", f"Found {len(destinations)} destinations")
         return json.dumps(summary, indent=2)
 
+    except RuntimeError as e:
+        error_msg = str(e)
+        # Check for specific Amadeus API errors
+        if "1797" in error_msg or "404" in error_msg:
+            return json.dumps({
+                "error": "No flight destinations found for this query (Amadeus Error 1797)",
+                "origin": origin.upper(),
+                "details": "The test environment has limited destination data available",
+                "suggestions": [
+                    "Try a major hub airport: JFK, LAX, LHR, CDG, FRA, DXB, SIN, HKG",
+                    "Remove the departure_date parameter for broader results",
+                    "Use search_flights for specific destination searches",
+                    "Switch to production environment for complete coverage"
+                ]
+            }, indent=2)
+        elif "38189" in error_msg or "500" in error_msg:
+            return json.dumps({
+                "error": "Internal server error from Amadeus API (Error 38189)",
+                "origin": origin.upper(),
+                "details": "This often occurs when using a departure date in test environment",
+                "suggestions": [
+                    "Try removing the departure_date parameter",
+                    "Use a major airport code instead of city code",
+                    "Use search_flights for date-specific searches"
+                ]
+            }, indent=2)
+        log_error("FlightInspiration", "APIError", error_msg)
+        return json.dumps({"error": error_msg}, indent=2)
     except Exception as e:
         log_error("FlightInspiration", type(e).__name__, str(e))
         return json.dumps({"error": str(e)}, indent=2)
@@ -523,9 +580,14 @@ async def flight_cheapest_dates(
     """
     Find the cheapest dates to fly to a destination.
 
+    IMPORTANT: This API has LIMITED data in test environment. Works best with:
+    - Major airport codes (not city codes): JFK, LAX, LHR, CDG, etc.
+    - Popular international routes
+    - Without specific departure dates (for broader results)
+
     Args:
-        origin: Origin airport/city IATA code (e.g., "NYC")
-        destination: Destination airport/city IATA code (e.g., "PAR")
+        origin: Origin AIRPORT IATA code (e.g., "JFK", "LAX") - use airport code, not city code
+        destination: Destination AIRPORT IATA code (e.g., "LHR", "CDG")
         departure_date: Optional specific departure date (YYYY-MM-DD) or leave empty for flexible search
         one_way: True for one-way flights, False for round-trip, default False
 
@@ -540,6 +602,7 @@ async def flight_cheapest_dates(
 
         if departure_date:
             params["departureDate"] = departure_date
+            log_info("CheapestDates", f"Searching with specific date: {departure_date}")
         if one_way:
             params["oneWay"] = "true"
 
@@ -550,9 +613,59 @@ async def flight_cheapest_dates(
             tool_name="CheapestDates"
         )
 
-        log_info("CheapestDates", "Retrieved cheapest dates")
+        # Check if we got results
+        data = result.get("data", [])
+        if not data:
+            error_response = {
+                "error": "No cheapest dates found for this route",
+                "route": f"{origin.upper()} → {destination.upper()}",
+                "possible_reasons": [
+                    "Test environment has very limited data for this route",
+                    "This route may not be available in the test database",
+                    "Domestic routes often have limited data in test environment"
+                ],
+                "suggestions": [
+                    "Try a major international route: JFK→LHR, LAX→NRT, SFO→CDG",
+                    "Use search_flights for specific date searches (more reliable)",
+                    "Remove the departure_date parameter for broader results",
+                    "Switch to production environment for complete data coverage"
+                ]
+            }
+            log_error("CheapestDates", "NoResults", f"No dates found for {origin}→{destination}")
+            return json.dumps(error_response, indent=2)
+
+        log_info("CheapestDates", f"Retrieved {len(data)} cheapest date options")
         return json.dumps(result, indent=2)
 
+    except RuntimeError as e:
+        error_msg = str(e)
+        # Check for specific Amadeus API errors
+        if "1797" in error_msg or "404" in error_msg:
+            return json.dumps({
+                "error": "No flight dates found for this route (Amadeus Error 1797)",
+                "route": f"{origin.upper()} → {destination.upper()}",
+                "details": "The test environment has very limited route data available",
+                "suggestions": [
+                    "Try a major international route: JFK→LHR, LAX→NRT, SFO→CDG, JFK→CDG",
+                    "Use search_flights instead - it has much better data coverage",
+                    "Remove the departure_date parameter",
+                    "Switch to production environment for complete coverage"
+                ],
+                "note": "search_flights is more reliable for finding actual flight availability"
+            }, indent=2)
+        elif "38189" in error_msg or "500" in error_msg:
+            return json.dumps({
+                "error": "Internal server error from Amadeus API (Error 38189)",
+                "route": f"{origin.upper()} → {destination.upper()}",
+                "details": "This often occurs with limited data availability in test environment",
+                "suggestions": [
+                    "Use search_flights instead - it's more reliable",
+                    "Try a different major international route",
+                    "Remove the departure_date parameter"
+                ]
+            }, indent=2)
+        log_error("CheapestDates", "APIError", error_msg)
+        return json.dumps({"error": error_msg}, indent=2)
     except Exception as e:
         log_error("CheapestDates", type(e).__name__, str(e))
         return json.dumps({"error": str(e)}, indent=2)
@@ -861,12 +974,20 @@ async def get_hotel_ratings(hotel_ids: str) -> str:
     """
     Get hotel ratings based on sentiment analysis of reviews.
 
-    The API has a limit on the number of hotels that can be queried at once.
-    For best results, query 1-3 hotels at a time.
+    IMPORTANT: The sentiment database has VERY LIMITED coverage in test environment.
+    Most hotel IDs will return "not in database" errors. This is a limitation of
+    the Amadeus test environment, not a bug.
+
+    For best results:
+    - Query 1-3 hotels at a time (maximum 10)
+    - Use hotel IDs from search_hotels_by_city or search_hotels_by_location
+    - Be prepared for "not in database" responses - this is normal in test environment
+    - Production environment has much better coverage
 
     Args:
         hotel_ids: Comma-separated hotel IDs (e.g., "MCLONGHM,ADNYCCTB")
-                   Maximum recommended: 3 hotels per request
+                   Maximum: 10 hotels per request
+                   Recommended: 1-3 hotels per request
 
     Returns:
         JSON string with hotel sentiment scores and ratings
@@ -883,11 +1004,15 @@ async def get_hotel_ratings(hotel_ids: str) -> str:
         # Warn if too many hotels
         if len(ids_list) > 10:
             return json.dumps({
-                "error": f"Too many hotel IDs ({len(ids_list)}). The API has a limit on the number of hotels that can be queried at once. Please query 10 or fewer hotels per request."
+                "error": f"Too many hotel IDs ({len(ids_list)})",
+                "details": "The API has a maximum limit of hotels that can be queried at once",
+                "provided_count": len(ids_list),
+                "maximum_allowed": 10,
+                "suggestion": "Split your request into multiple calls with 10 or fewer hotels each"
             }, indent=2)
 
         if len(ids_list) > 3:
-            log_info("GetHotelRatings", f"Warning: Querying {len(ids_list)} hotels. Some may not be in the database.")
+            log_info("GetHotelRatings", f"Warning: Querying {len(ids_list)} hotels. Many may not be in the sentiment database (test environment limitation).")
 
         # Format hotel IDs for the API
         formatted_ids = ",".join(ids_list)
@@ -904,19 +1029,56 @@ async def get_hotel_ratings(hotel_ids: str) -> str:
         data = result.get("data", [])
         if not data:
             return json.dumps({
-                "error": "No ratings found for the provided hotel IDs. This could mean:",
-                "reasons": [
-                    "Hotel IDs are not in the sentiment database",
-                    "Hotel IDs are incorrect or invalid",
-                    "Sentiment data is not available for these hotels"
+                "error": "No sentiment ratings found for any of the provided hotel IDs",
+                "requested_ids": ids_list,
+                "requested_count": len(ids_list),
+                "found_count": 0,
+                "common_reasons": [
+                    "MOST COMMON: Test environment has very limited sentiment database coverage",
+                    "Hotel IDs may not have review data in the database",
+                    "Hotel IDs may be incorrect or invalid",
+                    "Sentiment analysis data is not available for these specific hotels"
                 ],
-                "suggestion": "Try using hotel IDs from the search_hotels_by_city or search_hotels_by_location results.",
-                "requested_ids": ids_list
+                "suggestions": [
+                    "This is normal in test environment - limited database coverage",
+                    "Try hotel IDs from major chains in popular cities",
+                    "Use search_hotels_by_city or search_hotels_by_location to find valid hotel IDs",
+                    "Production environment has much better sentiment database coverage"
+                ],
+                "note": "Limited sentiment data in test environment is expected - not a bug"
             }, indent=2)
 
-        log_info("GetHotelRatings", f"Retrieved ratings for {len(data)} out of {len(ids_list)} hotels")
+        # Check if we got partial results
+        if len(data) < len(ids_list):
+            log_info("GetHotelRatings", f"Partial results: Retrieved ratings for {len(data)} out of {len(ids_list)} hotels (some not in sentiment database)")
+            # Add warning to the result
+            result["warning"] = {
+                "message": f"Only {len(data)} out of {len(ids_list)} hotels found in sentiment database",
+                "requested_ids": ids_list,
+                "found_count": len(data),
+                "missing_count": len(ids_list) - len(data),
+                "note": "Limited coverage in test environment is normal"
+            }
+
+        log_info("GetHotelRatings", f"Retrieved ratings for {len(data)} hotels")
         return json.dumps(result, indent=2)
 
+    except RuntimeError as e:
+        error_msg = str(e)
+        # Check for specific API errors
+        if "404" in error_msg or "not found" in error_msg.lower():
+            return json.dumps({
+                "error": "Hotels not found in sentiment database",
+                "requested_ids": hotel_ids.split(","),
+                "details": "The sentiment database has very limited coverage in test environment",
+                "suggestions": [
+                    "This is expected in test environment - not a bug",
+                    "Try major hotel chains in popular tourist cities",
+                    "Production environment has much better coverage"
+                ]
+            }, indent=2)
+        log_error("GetHotelRatings", "APIError", error_msg)
+        return json.dumps({"error": error_msg}, indent=2)
     except Exception as e:
         log_error("GetHotelRatings", type(e).__name__, str(e))
         return json.dumps({"error": str(e)}, indent=2)
