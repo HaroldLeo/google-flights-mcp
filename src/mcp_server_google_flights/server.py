@@ -56,6 +56,88 @@ def get_all_airports():
     return _airports_cache
 
 
+# --- Airline Code Mappings ---
+# IATA airline codes to full names used by fast-flights
+AIRLINE_CODE_TO_NAME = {
+    # Major US carriers
+    "AA": ["American", "American Airlines"],
+    "DL": ["Delta", "Delta Air Lines"],
+    "UA": ["United", "United Airlines"],
+    "WN": ["Southwest", "Southwest Airlines"],
+    "AS": ["Alaska", "Alaska Airlines"],
+    "B6": ["JetBlue", "JetBlue Airways"],
+    "F9": ["Frontier", "Frontier Airlines"],
+    "NK": ["Spirit", "Spirit Airlines"],
+    "G4": ["Allegiant", "Allegiant Air"],
+    "SY": ["Sun Country", "Sun Country Airlines"],
+
+    # Major International carriers
+    "AC": ["Air Canada"],
+    "AM": ["Aeroméxico", "Aeromexico"],
+    "BA": ["British Airways"],
+    "AF": ["Air France"],
+    "KL": ["KLM", "KLM Royal Dutch Airlines"],
+    "LH": ["Lufthansa"],
+    "EK": ["Emirates"],
+    "QR": ["Qatar Airways"],
+    "SQ": ["Singapore Airlines"],
+    "CX": ["Cathay Pacific"],
+    "NH": ["ANA", "All Nippon Airways"],
+    "JL": ["JAL", "Japan Airlines"],
+    "QF": ["Qantas"],
+    "EY": ["Etihad", "Etihad Airways"],
+    "TK": ["Turkish Airlines"],
+    "VS": ["Virgin Atlantic"],
+    "AZ": ["ITA Airways", "Alitalia"],
+    "IB": ["Iberia"],
+    "LX": ["Swiss", "Swiss International Air Lines"],
+    "OS": ["Austrian", "Austrian Airlines"],
+    "SN": ["Brussels Airlines"],
+    "SK": ["SAS", "Scandinavian Airlines"],
+    "AY": ["Finnair"],
+    "TP": ["TAP", "TAP Air Portugal"],
+    "EI": ["Aer Lingus"],
+    "WS": ["WestJet"],
+    "CM": ["Copa Airlines"],
+    "AV": ["Avianca"],
+    "LA": ["LATAM", "LATAM Airlines"],
+
+    # Asian carriers
+    "KE": ["Korean Air"],
+    "OZ": ["Asiana"],
+    "BR": ["EVA Air"],
+    "CI": ["China Airlines"],
+    "CA": ["Air China"],
+    "CZ": ["China Southern"],
+    "MU": ["China Eastern"],
+    "TG": ["Thai Airways"],
+    "VN": ["Vietnam Airlines"],
+    "MH": ["Malaysia Airlines"],
+    "GA": ["Garuda Indonesia"],
+    "PR": ["Philippine Airlines"],
+
+    # Budget carriers
+    "FR": ["Ryanair"],
+    "U2": ["easyJet"],
+    "VY": ["Vueling"],
+    "W6": ["Wizz Air"],
+    "TR": ["Scoot"],
+    "AK": ["AirAsia"],
+}
+
+def get_airline_names_for_code(code: str) -> List[str]:
+    """Get possible airline names for a given IATA code.
+
+    Args:
+        code: IATA airline code (e.g., "UA", "AA")
+
+    Returns:
+        List of possible airline name variations
+    """
+    code_upper = code.upper()
+    return AIRLINE_CODE_TO_NAME.get(code_upper, [code])
+
+
 # --- Helper functions ---
 
 def log_info(tool_name: str, message: str):
@@ -570,6 +652,99 @@ def normalize_serpapi_flight(flight_data: Dict, is_best: bool = False) -> Dict:
         }
 
 
+def get_return_flights_from_serpapi(departure_token: str) -> Optional[Dict]:
+    """Fetch return flights for a specific outbound flight using departure_token.
+
+    Args:
+        departure_token: Token from outbound flight to fetch matching return flights
+
+    Returns:
+        SerpApi response with return flight options, or None if error
+    """
+    if not SERPAPI_ENABLED:
+        return None
+
+    try:
+        params = {
+            "engine": "google_flights",
+            "api_key": SERPAPI_API_KEY,
+            "departure_id": departure_token,
+            "type": 3  # Type 3 indicates return flights query
+        }
+
+        search = GoogleSearch(params)
+        results = search.get_dict()
+        return results
+
+    except Exception as e:
+        log_error("get_return_flights_from_serpapi", type(e).__name__, str(e))
+        return None
+
+
+def combine_outbound_and_return_flights(
+    outbound_flight: Dict,
+    return_flight: Dict
+) -> Dict:
+    """Combine outbound and return flights into a single round-trip package.
+
+    Args:
+        outbound_flight: Normalized outbound flight
+        return_flight: Normalized return flight
+
+    Returns:
+        Combined round-trip flight dict
+    """
+    try:
+        # Calculate total price
+        outbound_price = outbound_flight.get("price", 0)
+        return_price = return_flight.get("price", 0)
+
+        # Parse prices (remove $ and convert to int)
+        if isinstance(outbound_price, str):
+            outbound_price = int(outbound_price.replace("$", "").replace(",", ""))
+        if isinstance(return_price, str):
+            return_price = int(return_price.replace("$", "").replace(",", ""))
+
+        total_price = outbound_price + return_price
+
+        # Combine segments
+        outbound_segments = outbound_flight.get("segments", [])
+        return_segments = return_flight.get("segments", [])
+        all_segments = outbound_segments + return_segments
+
+        # Get overall times
+        overall_departure = outbound_flight.get("departure_time")
+        overall_arrival = return_flight.get("arrival_time")
+
+        # Combine airlines
+        outbound_airlines = outbound_flight.get("airlines", "")
+        return_airlines = return_flight.get("airlines", "")
+        all_airlines = f"{outbound_airlines}, {return_airlines}" if return_airlines != outbound_airlines else outbound_airlines
+
+        return {
+            "price": total_price,
+            "airlines": all_airlines,
+            "flight_type": "Round trip",
+            "departure_time": overall_departure,
+            "arrival_time": overall_arrival,
+            "total_duration": None,  # Would need to calculate including layover time
+            "stops": len(all_segments) - 1 if all_segments else 0,
+            "segments": all_segments,
+            "outbound_details": outbound_flight,
+            "return_details": return_flight,
+            "source": "SerpApi (combined)",
+            "is_best_flight": outbound_flight.get("is_best_flight", False),
+        }
+
+    except Exception as e:
+        log_error("combine_outbound_and_return_flights", type(e).__name__, str(e))
+        return {
+            "error": f"Failed to combine flights: {str(e)}",
+            "outbound": outbound_flight,
+            "return": return_flight
+        }
+
+
 def convert_serpapi_response(serpapi_result: Dict) -> List[Dict]:
     """Convert full SerpApi response to list of normalized flights.
 
@@ -636,9 +811,55 @@ def try_serpapi_fallback(
         )
 
         if serpapi_result:
-            flights = convert_serpapi_response(serpapi_result)
-            if flights:
-                log_info(tool_name, f"SerpApi fallback successful: {len(flights)} flights")
+            outbound_flights = convert_serpapi_response(serpapi_result)
+            if outbound_flights:
+                log_info(tool_name, f"SerpApi fallback successful: {len(outbound_flights)} outbound flights")
+
+                # For round-trip searches, fetch return flights
+                if return_date:
+                    log_info(tool_name, "Round-trip detected - fetching return flights...")
+                    complete_roundtrips = []
+
+                    # Get departure tokens from outbound flights (limit to avoid excessive API calls)
+                    # Process top 3 best flights to balance completeness vs API cost
+                    max_outbound_to_process = min(3, len(outbound_flights))
+                    outbound_to_process = outbound_flights[:max_outbound_to_process]
+
+                    for idx, outbound in enumerate(outbound_to_process):
+                        # Get departure_token from the raw SerpApi data
+                        # Look for it in best_flights or other_flights arrays
+                        departure_token = None
+                        for flight in serpapi_result.get("best_flights", []) + serpapi_result.get("other_flights", []):
+                            # Match by price to find the corresponding raw flight
+                            if flight.get("price") == outbound.get("price"):
+                                departure_token = flight.get("departure_token")
+                                break
+
+                        if not departure_token:
+                            log_info(tool_name, f"No departure_token for outbound flight #{idx+1}, skipping")
+                            continue
+
+                        log_info(tool_name, f"Fetching return flights for outbound option #{idx+1}")
+                        return_result = get_return_flights_from_serpapi(departure_token)
+
+                        if return_result:
+                            return_flights = convert_serpapi_response(return_result)
+                            if return_flights:
+                                # Combine this outbound with each return option (take top 2 returns)
+                                for return_flight in return_flights[:2]:
+                                    combined = combine_outbound_and_return_flights(outbound, return_flight)
+                                    complete_roundtrips.append(combined)
+
+                    if complete_roundtrips:
+                        log_info(tool_name, f"Created {len(complete_roundtrips)} complete round-trip options")
+                        flights = complete_roundtrips
+                    else:
+                        log_info(tool_name, "Could not fetch return flights, returning outbound only")
+                        flights = outbound_flights
+                        # Add warning that only outbound is shown
+                else:
+                    # One-way flight
+                    flights = outbound_flights
 
                 # Process based on return_cheapest_only
                 if return_cheapest_only and len(flights) > 0:
@@ -668,13 +889,16 @@ def try_serpapi_fallback(
                     "note": "Results from SerpApi due to fast-flights error"
                 }
 
-                # Add warning for round-trip searches
-                if return_date:
+                # Add note about round-trip processing
+                if return_date and len([f for f in processed_flights if f.get("flight_type") == "Round trip"]) > 0:
                     output_data["round_trip_note"] = (
-                        "⚠️  SerpApi fallback currently shows outbound flights only. "
-                        "For complete round-trip options with both outbound and return flights, "
-                        "the primary fast-flights method is recommended. "
-                        "Alternatively, search two separate one-way flights for full control."
+                        "✓ Complete round-trip packages with both outbound and return flights. "
+                        "Limited to top outbound options to minimize API costs."
+                    )
+                elif return_date:
+                    output_data["round_trip_note"] = (
+                        "⚠️  Could not fetch complete round-trip options. Showing outbound flights only. "
+                        "For complete round-trip options, try searching two separate one-way flights."
                     )
 
                 if not return_cheapest_only and max_results > 0:
@@ -2411,13 +2635,36 @@ async def search_flights_by_airline(
             # Filter flights by airline (post-filtering since v2.2 doesn't support airline parameter)
             log_info(TOOL, f"Filtering {len(result.flights)} flights by airlines: {airlines_list}")
             filtered_flights = []
-            airlines_upper = [a.upper() for a in airlines_list]
+
+            # Build a set of all possible airline name variations we're looking for
+            target_airline_names = set()
+            for airline_code_or_name in airlines_list:
+                # Add the original value (could be code or name)
+                target_airline_names.add(airline_code_or_name.upper())
+                # If it's a code, add all possible name variations
+                possible_names = get_airline_names_for_code(airline_code_or_name)
+                for name in possible_names:
+                    target_airline_names.add(name.upper())
+
+            log_debug(TOOL, "target_names", f"Looking for: {target_airline_names}")
 
             for flight in result.flights:
                 # Get airline name from the flight object
-                airline_name = getattr(flight, 'name', '').upper()
-                # Check if any of the requested airlines match
-                if any(airline.upper() in airline_name for airline in airlines_list):
+                flight_airline = getattr(flight, 'name', '')
+                if not flight_airline:
+                    continue
+
+                flight_airline_upper = flight_airline.upper()
+
+                # Check if the flight airline matches any of our target names
+                # Use exact match or substring match for flexibility
+                matches = False
+                for target in target_airline_names:
+                    if target in flight_airline_upper or flight_airline_upper in target:
+                        matches = True
+                        break
+
+                if matches:
                     filtered_flights.append(flight)
 
             log_info(TOOL, f"Found {len(filtered_flights)} flights matching specified airlines")
