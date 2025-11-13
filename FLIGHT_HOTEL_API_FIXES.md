@@ -2,50 +2,61 @@
 
 ## Issues Fixed
 
-### 1. confirm_flight_price - Aircraft Code Format Error
+### 1. confirm_flight_price - Missing Mandatory Fields Error
 
 **Problem:**
 ```
-Error 400: INVALID FORMAT
-Cause: aircraft field format incompatible ("32Q" invalid)
+Error 400: MANDATORY DATA MISSING
+Missing fields: travelerPricings, source, segment IDs
+Cause: Using simplified flight offer format instead of complete raw data
 ```
 
-The flight pricing confirmation API (`/v1/shopping/flight-offers/pricing`) is more strict than the flight search API and rejects certain aircraft codes that are returned in search results.
+The flight pricing confirmation API (`/v1/shopping/flight-offers/pricing`) requires the COMPLETE raw flight offer data from the Amadeus API, but users were passing the simplified summary format returned by `search_flights`.
 
 **Root Cause:**
-- Flight search results may contain non-standard aircraft codes (e.g., "32Q", codes with special characters)
-- The pricing API validates aircraft codes more strictly and rejects invalid formats
-- Aircraft codes longer than 3 characters or containing unusual characters cause validation errors
+- `search_flights` was returning only a simplified summary for readability
+- The simplified format was missing mandatory fields required by the pricing API:
+  - `travelerPricings` - passenger pricing breakdown
+  - `source` - offer source identifier (e.g., "GDS")
+  - Segment `id` fields - unique identifiers for flight segments
+- Users didn't know they needed the complete raw data, not the summary
 
 **Solution:**
-Created `sanitize_flight_offer_for_pricing()` function that:
-1. Makes a deep copy of the flight offer to avoid modifying the original
-2. Scans all segments for aircraft codes
-3. Removes invalid aircraft codes based on:
-   - Length > 3 characters (standard IATA codes are 3 chars like "738", "777")
-   - Contains special characters beyond standard alphanumerics
-   - Unusual format patterns
-4. Logs removed codes for debugging
+Enhanced both `search_flights` and `confirm_flight_price`:
+
+1. **search_flights now returns BOTH formats:**
+   - `offers` - Simplified summary for easy reading
+   - `raw_offers` - Complete raw data for use with confirm_flight_price
+
+2. **confirm_flight_price validates input:**
+   - Checks for missing mandatory fields
+   - Provides clear error message if simplified data is used
+   - Shows example of correct usage
+   - Still automatically removes aircraft codes to prevent validation errors
 
 **Code Changes:**
 ```python
-def sanitize_flight_offer_for_pricing(offer: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Sanitize flight offer data for the pricing API.
-    Removes aircraft codes that may cause validation errors.
-    """
-    # ... implementation removes invalid aircraft codes
+# search_flights now includes raw offers
+summary = {
+    "offers": [...],  # Simplified summary
+    "raw_offers": offers[:max_results]  # Complete raw data
+}
+
+# confirm_flight_price validates input
+if "travelerPricings" not in offer or "source" not in offer:
+    return helpful_error_message_with_solution()
 ```
 
-**Updated Function:**
-- `confirm_flight_price()` now automatically sanitizes data before sending to API
-- Added documentation note about automatic sanitization
-- Better error handling and logging
+**Updated Functions:**
+- `search_flights()` returns both simplified and raw offer data
+- `confirm_flight_price()` validates input format and provides helpful errors
+- Documentation updated with clear usage examples
 
 **Result:**
-✅ Flight price confirmation now works even with non-standard aircraft codes
-✅ Invalid codes are automatically removed
-✅ Detailed logging shows which codes were removed
+✅ Users have access to both simplified and complete flight offer data
+✅ Clear error messages when wrong format is used
+✅ Easy-to-follow examples in documentation
+✅ Automatic aircraft code sanitization still works
 
 ---
 
@@ -128,18 +139,22 @@ async def get_hotel_ratings(hotel_ids: str) -> str:
 
 ## Usage Examples
 
-### Using confirm_flight_price (with auto-sanitization)
+### Using confirm_flight_price (with validation and auto-sanitization)
 
 ```python
 # Get flight offers
 search_result = search_flights("JFK", "LAX", "2024-12-15")
-offers = json.loads(search_result)
+result = json.loads(search_result)
 
-# Confirm price (automatically handles invalid aircraft codes)
-first_offer = offers["offers"][0]
-confirmed = confirm_flight_price(json.dumps(first_offer))
-# Aircraft code "32Q" automatically removed if invalid
-# Pricing confirmed with sanitized data
+# WRONG - Using simplified format (missing required fields)
+# first_offer = result["offers"][0]  # ❌ This will fail!
+
+# CORRECT - Using complete raw format
+first_raw_offer = result["raw_offers"][0]  # ✅ Has all required fields
+confirmed = confirm_flight_price(json.dumps(first_raw_offer))
+# - Validates that all required fields are present
+# - Automatically removes invalid aircraft codes
+# - Returns confirmed pricing with tax details
 ```
 
 ### Using get_hotel_ratings (with validation)
@@ -181,10 +196,15 @@ ratings = get_hotel_ratings("INVALID,BADID")
 ### Test confirm_flight_price
 
 ```bash
-# Test with flight that has unusual aircraft codes
+# Test with complete raw offer data
 search_result = search_flights("JFK", "LAX", "2024-12-20")
-# Look for aircraft codes like "32Q", "XXX", etc.
-# These should be automatically removed during price confirmation
+result = json.loads(search_result)
+
+# Test with raw offer (should work)
+confirm_flight_price(json.dumps(result["raw_offers"][0]))  # ✅ Should succeed
+
+# Test with simplified offer (should give helpful error)
+confirm_flight_price(json.dumps(result["offers"][0]))  # ❌ Should explain what's wrong
 ```
 
 ### Test get_hotel_ratings
@@ -208,8 +228,12 @@ get_hotel_ratings("INVALID,BADID")  # Should give helpful error
 ## Impact
 
 **confirm_flight_price:**
-- **Before:** Failed with Error 400 on unusual aircraft codes
-- **After:** Automatically sanitizes and succeeds
+- **Before:** Failed with Error 400 "MANDATORY DATA MISSING" when using simplified offer format
+- **After:**
+  - `search_flights` now returns both simplified and raw offer data
+  - Validates input and provides clear error if wrong format used
+  - Automatically sanitizes aircraft codes
+  - Succeeds with proper raw offer data
 
 **get_hotel_ratings:**
 - **Before:** Confusing errors about limits and missing data
