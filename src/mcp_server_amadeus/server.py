@@ -346,7 +346,14 @@ def sanitize_flight_offer_for_pricing(offer: Dict[str, Any]) -> Dict[str, Any]:
                 for segment in itinerary["segments"]:
                     # Remove aircraft field entirely to avoid validation errors
                     if "aircraft" in segment:
-                        aircraft_code = segment.get("aircraft", {}).get("code", "unknown")
+                        # Handle both formats: aircraft as string (from search summary) or dict (from raw API)
+                        aircraft = segment.get("aircraft")
+                        if isinstance(aircraft, dict):
+                            aircraft_code = aircraft.get("code", "unknown")
+                        elif isinstance(aircraft, str):
+                            aircraft_code = aircraft
+                        else:
+                            aircraft_code = "unknown"
                         log_info("ConfirmPrice", f"Removing aircraft field (code: {aircraft_code}) to prevent API validation errors")
                         segment.pop("aircraft", None)
 
