@@ -405,108 +405,55 @@ async def confirm_flight_price(flight_offer_data: str) -> str:
         return json.dumps({"error": str(e)}, indent=2)
 
 
-@mcp.tool()
+# ============================================================================
+# BOOKING TOOLS - DISABLED
+# ============================================================================
+# These tools are disabled because they have limited utility in test environment:
+# - Test environment does not create real bookings
+# - Requires extensive traveler data (passport, contact info, etc.)
+# - Most users prefer to book directly on airline/OTA websites
+# - Adds complexity without practical value for an MCP tool
+#
+# To re-enable, uncomment the @mcp.tool() decorators below
+# ============================================================================
+
+# @mcp.tool()
 async def book_flight(
     flight_offer_data: str,
     travelers: str
 ) -> str:
     """
-    Book a flight and create a flight order.
+    [DISABLED] Book a flight and create a flight order.
 
-    Args:
-        flight_offer_data: JSON string with the flight offer from search/pricing
-        travelers: JSON string array with traveler information. Each traveler needs:
-            - id: String identifier (e.g., "1", "2")
-            - dateOfBirth: YYYY-MM-DD format
-            - name: {firstName, lastName}
-            - gender: MALE or FEMALE
-            - contact: {emailAddress, phones: [{deviceType, countryCallingCode, number}]}
-            - documents: [{documentType, birthPlace, issuanceLocation, issuanceDate, number, expiryDate, issuanceCountry, validityCountry, nationality, holder}]
-
-    Returns:
-        JSON string with booking confirmation and order details
+    This tool is disabled in the current version. Use confirm_flight_price
+    to get detailed pricing, then book directly on the airline website.
     """
-    try:
-        offer = json.loads(flight_offer_data)
-        travelers_list = json.loads(travelers)
-
-        payload = {
-            "data": {
-                "type": "flight-order",
-                "flightOffers": [offer],
-                "travelers": travelers_list
-            }
-        }
-
-        result = await amadeus_request(
-            "POST",
-            "/v1/booking/flight-orders",
-            data=payload,
-            tool_name="BookFlight"
-        )
-
-        log_info("BookFlight", "Flight booked successfully")
-        return json.dumps(result, indent=2)
-
-    except json.JSONDecodeError as e:
-        error_msg = f"Invalid JSON input: {e}"
-        log_error("BookFlight", "InvalidInput", error_msg)
-        return json.dumps({"error": error_msg}, indent=2)
-    except Exception as e:
-        log_error("BookFlight", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version. Use confirm_flight_price for pricing, then book on the airline website.",
+        "reason": "Test environment does not create real bookings"
+    }, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def get_flight_order(order_id: str) -> str:
     """
-    Retrieve details of a flight order.
-
-    Args:
-        order_id: Flight order ID from booking
-
-    Returns:
-        JSON string with complete order details
+    [DISABLED] Retrieve details of a flight order.
     """
-    try:
-        result = await amadeus_request(
-            "GET",
-            f"/v1/booking/flight-orders/{order_id}",
-            tool_name="GetFlightOrder"
-        )
-
-        log_info("GetFlightOrder", f"Retrieved order {order_id}")
-        return json.dumps(result, indent=2)
-
-    except Exception as e:
-        log_error("GetFlightOrder", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version.",
+        "reason": "Test environment does not create real bookings"
+    }, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def cancel_flight_order(order_id: str) -> str:
     """
-    Cancel a flight order.
-
-    Args:
-        order_id: Flight order ID to cancel
-
-    Returns:
-        JSON string with cancellation confirmation
+    [DISABLED] Cancel a flight order.
     """
-    try:
-        result = await amadeus_request(
-            "DELETE",
-            f"/v1/booking/flight-orders/{order_id}",
-            tool_name="CancelFlightOrder"
-        )
-
-        log_info("CancelFlightOrder", f"Cancelled order {order_id}")
-        return json.dumps({"status": "cancelled", "order_id": order_id}, indent=2)
-
-    except Exception as e:
-        log_error("CancelFlightOrder", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version.",
+        "reason": "Test environment does not create real bookings"
+    }, indent=2)
 
 
 @mcp.tool()
@@ -891,52 +838,22 @@ async def get_hotel_offers(
         return json.dumps({"error": str(e)}, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def book_hotel(
     offer_id: str,
     guests: str,
     payment: str
 ) -> str:
     """
-    Book a hotel room.
+    [DISABLED] Book a hotel room.
 
-    Args:
-        offer_id: Hotel offer ID from get_hotel_offers
-        guests: JSON string array with guest information [{name: {firstName, lastName}, contact: {email, phone}}]
-        payment: JSON string with payment info {method, vendorCode, cardNumber, expiryDate}
-
-    Returns:
-        JSON string with booking confirmation
+    This tool is disabled. Use get_hotel_offers to find hotels,
+    then book directly on hotel/OTA websites.
     """
-    try:
-        guests_list = json.loads(guests)
-        payment_info = json.loads(payment)
-
-        payload = {
-            "data": {
-                "offerId": offer_id,
-                "guests": guests_list,
-                "payments": [payment_info]
-            }
-        }
-
-        result = await amadeus_request(
-            "POST",
-            "/v2/booking/hotel-orders",
-            data=payload,
-            tool_name="BookHotel"
-        )
-
-        log_info("BookHotel", "Hotel booked successfully")
-        return json.dumps(result, indent=2)
-
-    except json.JSONDecodeError as e:
-        error_msg = f"Invalid JSON input: {e}"
-        log_error("BookHotel", "InvalidInput", error_msg)
-        return json.dumps({"error": error_msg}, indent=2)
-    except Exception as e:
-        log_error("BookHotel", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version. Use get_hotel_offers for pricing, then book on hotel websites.",
+        "reason": "Test environment does not create real bookings; requires payment information"
+    }, indent=2)
 
 
 @mcp.tool()
@@ -1354,51 +1271,21 @@ async def search_transfers(
         return json.dumps({"error": str(e)}, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def book_transfer(
     offer_id: str,
     passenger_details: str
 ) -> str:
     """
-    Book an airport transfer.
+    [DISABLED] Book an airport transfer.
 
-    Args:
-        offer_id: Transfer offer ID from search results
-        passenger_details: JSON string with passenger info {name, phone, email}
-
-    Returns:
-        JSON string with transfer booking confirmation
+    This tool is disabled. Use search_transfers to find options,
+    then book directly with transfer companies or through travel websites.
     """
-    try:
-        passenger = json.loads(passenger_details)
-
-        payload = {
-            "data": {
-                "note": "Transfer booking",
-                "passengers": [passenger],
-                "agency": {
-                    "contacts": [passenger]
-                }
-            }
-        }
-
-        result = await amadeus_request(
-            "POST",
-            f"/v1/ordering/transfer-orders?offerId={offer_id}",
-            data=payload,
-            tool_name="BookTransfer"
-        )
-
-        log_info("BookTransfer", "Transfer booked successfully")
-        return json.dumps(result, indent=2)
-
-    except json.JSONDecodeError as e:
-        error_msg = f"Invalid passenger JSON: {e}"
-        log_error("BookTransfer", "InvalidInput", error_msg)
-        return json.dumps({"error": error_msg}, indent=2)
-    except Exception as e:
-        log_error("BookTransfer", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version. Use search_transfers for pricing, then book on transfer websites.",
+        "reason": "Test environment does not create real bookings"
+    }, indent=2)
 
 
 # ============================================================================
@@ -1696,7 +1583,7 @@ async def get_booking_insights(
         return json.dumps({"error": str(e)}, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def predict_trip_purpose(
     origin: str,
     destination: str,
@@ -1704,40 +1591,15 @@ async def predict_trip_purpose(
     return_date: Optional[str] = None
 ) -> str:
     """
-    Predict if a trip is for business or leisure.
+    [DISABLED] Predict if a trip is for business or leisure.
 
-    Args:
-        origin: Origin airport code
-        destination: Destination airport code
-        departure_date: Departure date in YYYY-MM-DD format
-        return_date: Optional return date for round trips
-
-    Returns:
-        JSON string with prediction (BUSINESS or LEISURE) and probability
+    This tool is disabled because users already know their trip purpose.
+    The AI prediction provides minimal practical value.
     """
-    try:
-        params = {
-            "originLocationCode": origin.upper(),
-            "destinationLocationCode": destination.upper(),
-            "departureDate": departure_date
-        }
-
-        if return_date:
-            params["returnDate"] = return_date
-
-        result = await amadeus_request(
-            "GET",
-            "/v1/travel/predictions/trip-purpose",
-            params=params,
-            tool_name="PredictTripPurpose"
-        )
-
-        log_info("PredictTripPurpose", "Trip purpose prediction completed")
-        return json.dumps(result, indent=2)
-
-    except Exception as e:
-        log_error("PredictTripPurpose", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "predict_trip_purpose is disabled in this version.",
+        "reason": "Users already know their trip purpose; minimal practical value"
+    }, indent=2)
 
 
 # ============================================================================
