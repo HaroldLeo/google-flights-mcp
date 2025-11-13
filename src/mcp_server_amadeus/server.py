@@ -317,6 +317,45 @@ async def search_flights(
         return json.dumps({"error": str(e)}, indent=2)
 
 
+def sanitize_flight_offer_for_pricing(offer: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sanitize flight offer data for the pricing API.
+
+    The pricing API is more strict than the search API and may reject certain
+    aircraft codes or other fields. This function cleans the data.
+
+    Args:
+        offer: Flight offer dictionary from search results
+
+    Returns:
+        Sanitized flight offer dictionary
+    """
+    # Create a deep copy to avoid modifying the original
+    import copy
+    sanitized = copy.deepcopy(offer)
+
+    # Check and clean aircraft codes in segments
+    if "itineraries" in sanitized:
+        for itinerary in sanitized["itineraries"]:
+            if "segments" in itinerary:
+                for segment in itinerary["segments"]:
+                    # Remove aircraft field if it contains invalid codes
+                    # Invalid codes often have special characters or unusual formats
+                    if "aircraft" in segment and "code" in segment["aircraft"]:
+                        aircraft_code = segment["aircraft"]["code"]
+                        # If aircraft code contains non-alphanumeric characters (except common ones)
+                        # or is in an unusual format, remove it
+                        if aircraft_code and (
+                            len(aircraft_code) > 3 or  # Most valid codes are 3 chars
+                            not aircraft_code.replace("Q", "").replace("X", "").isalnum()  # Contains special chars
+                        ):
+                            # Remove the entire aircraft field to avoid validation errors
+                            log_info("ConfirmPrice", f"Removing potentially invalid aircraft code: {aircraft_code}")
+                            segment.pop("aircraft", None)
+
+    return sanitized
+
+
 @mcp.tool()
 async def confirm_flight_price(flight_offer_data: str) -> str:
     """
@@ -324,6 +363,9 @@ async def confirm_flight_price(flight_offer_data: str) -> str:
 
     This validates that the price is still available and provides detailed tax breakdown.
     Use the flight offer data from search_flights results.
+
+    Note: This function automatically sanitizes flight offer data to remove fields
+    that may cause validation errors (such as invalid aircraft codes).
 
     Args:
         flight_offer_data: JSON string containing the complete flight offer object from search results
@@ -334,10 +376,13 @@ async def confirm_flight_price(flight_offer_data: str) -> str:
     try:
         offer = json.loads(flight_offer_data)
 
+        # Sanitize the offer data to remove potentially problematic fields
+        sanitized_offer = sanitize_flight_offer_for_pricing(offer)
+
         payload = {
             "data": {
                 "type": "flight-offers-pricing",
-                "flightOffers": [offer]
+                "flightOffers": [sanitized_offer]
             }
         }
 
@@ -360,108 +405,55 @@ async def confirm_flight_price(flight_offer_data: str) -> str:
         return json.dumps({"error": str(e)}, indent=2)
 
 
-@mcp.tool()
+# ============================================================================
+# BOOKING TOOLS - DISABLED
+# ============================================================================
+# These tools are disabled because they have limited utility in test environment:
+# - Test environment does not create real bookings
+# - Requires extensive traveler data (passport, contact info, etc.)
+# - Most users prefer to book directly on airline/OTA websites
+# - Adds complexity without practical value for an MCP tool
+#
+# To re-enable, uncomment the @mcp.tool() decorators below
+# ============================================================================
+
+# @mcp.tool()
 async def book_flight(
     flight_offer_data: str,
     travelers: str
 ) -> str:
     """
-    Book a flight and create a flight order.
+    [DISABLED] Book a flight and create a flight order.
 
-    Args:
-        flight_offer_data: JSON string with the flight offer from search/pricing
-        travelers: JSON string array with traveler information. Each traveler needs:
-            - id: String identifier (e.g., "1", "2")
-            - dateOfBirth: YYYY-MM-DD format
-            - name: {firstName, lastName}
-            - gender: MALE or FEMALE
-            - contact: {emailAddress, phones: [{deviceType, countryCallingCode, number}]}
-            - documents: [{documentType, birthPlace, issuanceLocation, issuanceDate, number, expiryDate, issuanceCountry, validityCountry, nationality, holder}]
-
-    Returns:
-        JSON string with booking confirmation and order details
+    This tool is disabled in the current version. Use confirm_flight_price
+    to get detailed pricing, then book directly on the airline website.
     """
-    try:
-        offer = json.loads(flight_offer_data)
-        travelers_list = json.loads(travelers)
-
-        payload = {
-            "data": {
-                "type": "flight-order",
-                "flightOffers": [offer],
-                "travelers": travelers_list
-            }
-        }
-
-        result = await amadeus_request(
-            "POST",
-            "/v1/booking/flight-orders",
-            data=payload,
-            tool_name="BookFlight"
-        )
-
-        log_info("BookFlight", "Flight booked successfully")
-        return json.dumps(result, indent=2)
-
-    except json.JSONDecodeError as e:
-        error_msg = f"Invalid JSON input: {e}"
-        log_error("BookFlight", "InvalidInput", error_msg)
-        return json.dumps({"error": error_msg}, indent=2)
-    except Exception as e:
-        log_error("BookFlight", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version. Use confirm_flight_price for pricing, then book on the airline website.",
+        "reason": "Test environment does not create real bookings"
+    }, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def get_flight_order(order_id: str) -> str:
     """
-    Retrieve details of a flight order.
-
-    Args:
-        order_id: Flight order ID from booking
-
-    Returns:
-        JSON string with complete order details
+    [DISABLED] Retrieve details of a flight order.
     """
-    try:
-        result = await amadeus_request(
-            "GET",
-            f"/v1/booking/flight-orders/{order_id}",
-            tool_name="GetFlightOrder"
-        )
-
-        log_info("GetFlightOrder", f"Retrieved order {order_id}")
-        return json.dumps(result, indent=2)
-
-    except Exception as e:
-        log_error("GetFlightOrder", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version.",
+        "reason": "Test environment does not create real bookings"
+    }, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def cancel_flight_order(order_id: str) -> str:
     """
-    Cancel a flight order.
-
-    Args:
-        order_id: Flight order ID to cancel
-
-    Returns:
-        JSON string with cancellation confirmation
+    [DISABLED] Cancel a flight order.
     """
-    try:
-        result = await amadeus_request(
-            "DELETE",
-            f"/v1/booking/flight-orders/{order_id}",
-            tool_name="CancelFlightOrder"
-        )
-
-        log_info("CancelFlightOrder", f"Cancelled order {order_id}")
-        return json.dumps({"status": "cancelled", "order_id": order_id}, indent=2)
-
-    except Exception as e:
-        log_error("CancelFlightOrder", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version.",
+        "reason": "Test environment does not create real bookings"
+    }, indent=2)
 
 
 @mcp.tool()
@@ -846,52 +838,22 @@ async def get_hotel_offers(
         return json.dumps({"error": str(e)}, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def book_hotel(
     offer_id: str,
     guests: str,
     payment: str
 ) -> str:
     """
-    Book a hotel room.
+    [DISABLED] Book a hotel room.
 
-    Args:
-        offer_id: Hotel offer ID from get_hotel_offers
-        guests: JSON string array with guest information [{name: {firstName, lastName}, contact: {email, phone}}]
-        payment: JSON string with payment info {method, vendorCode, cardNumber, expiryDate}
-
-    Returns:
-        JSON string with booking confirmation
+    This tool is disabled. Use get_hotel_offers to find hotels,
+    then book directly on hotel/OTA websites.
     """
-    try:
-        guests_list = json.loads(guests)
-        payment_info = json.loads(payment)
-
-        payload = {
-            "data": {
-                "offerId": offer_id,
-                "guests": guests_list,
-                "payments": [payment_info]
-            }
-        }
-
-        result = await amadeus_request(
-            "POST",
-            "/v2/booking/hotel-orders",
-            data=payload,
-            tool_name="BookHotel"
-        )
-
-        log_info("BookHotel", "Hotel booked successfully")
-        return json.dumps(result, indent=2)
-
-    except json.JSONDecodeError as e:
-        error_msg = f"Invalid JSON input: {e}"
-        log_error("BookHotel", "InvalidInput", error_msg)
-        return json.dumps({"error": error_msg}, indent=2)
-    except Exception as e:
-        log_error("BookHotel", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version. Use get_hotel_offers for pricing, then book on hotel websites.",
+        "reason": "Test environment does not create real bookings; requires payment information"
+    }, indent=2)
 
 
 @mcp.tool()
@@ -899,14 +861,37 @@ async def get_hotel_ratings(hotel_ids: str) -> str:
     """
     Get hotel ratings based on sentiment analysis of reviews.
 
+    The API has a limit on the number of hotels that can be queried at once.
+    For best results, query 1-3 hotels at a time.
+
     Args:
         hotel_ids: Comma-separated hotel IDs (e.g., "MCLONGHM,ADNYCCTB")
+                   Maximum recommended: 3 hotels per request
 
     Returns:
         JSON string with hotel sentiment scores and ratings
     """
     try:
-        params = {"hotelIds": hotel_ids.upper()}
+        # Split and validate hotel IDs
+        ids_list = [id.strip().upper() for id in hotel_ids.split(",") if id.strip()]
+
+        if not ids_list:
+            return json.dumps({
+                "error": "No hotel IDs provided. Please provide comma-separated hotel IDs."
+            }, indent=2)
+
+        # Warn if too many hotels
+        if len(ids_list) > 10:
+            return json.dumps({
+                "error": f"Too many hotel IDs ({len(ids_list)}). The API has a limit on the number of hotels that can be queried at once. Please query 10 or fewer hotels per request."
+            }, indent=2)
+
+        if len(ids_list) > 3:
+            log_info("GetHotelRatings", f"Warning: Querying {len(ids_list)} hotels. Some may not be in the database.")
+
+        # Format hotel IDs for the API
+        formatted_ids = ",".join(ids_list)
+        params = {"hotelIds": formatted_ids}
 
         result = await amadeus_request(
             "GET",
@@ -915,7 +900,21 @@ async def get_hotel_ratings(hotel_ids: str) -> str:
             tool_name="GetHotelRatings"
         )
 
-        log_info("GetHotelRatings", f"Retrieved ratings for hotels")
+        # Check if any hotels were found
+        data = result.get("data", [])
+        if not data:
+            return json.dumps({
+                "error": "No ratings found for the provided hotel IDs. This could mean:",
+                "reasons": [
+                    "Hotel IDs are not in the sentiment database",
+                    "Hotel IDs are incorrect or invalid",
+                    "Sentiment data is not available for these hotels"
+                ],
+                "suggestion": "Try using hotel IDs from the search_hotels_by_city or search_hotels_by_location results.",
+                "requested_ids": ids_list
+            }, indent=2)
+
+        log_info("GetHotelRatings", f"Retrieved ratings for {len(data)} out of {len(ids_list)} hotels")
         return json.dumps(result, indent=2)
 
     except Exception as e:
@@ -997,39 +996,264 @@ async def get_activity_details(activity_id: str) -> str:
 # TRANSFERS
 # ============================================================================
 
+# Airport location database with complete information for transfer API
+AIRPORT_LOCATIONS = {
+    # Paris Airports
+    "CDG": {
+        "name": "Paris Charles de Gaulle Airport",
+        "cityName": "Paris",
+        "countryCode": "FR",
+        "geoCode": "49.0097,2.5479",
+        "addressLine": "95700 Roissy-en-France"
+    },
+    "ORY": {
+        "name": "Paris Orly Airport",
+        "cityName": "Paris",
+        "countryCode": "FR",
+        "geoCode": "48.7233,2.3794",
+        "addressLine": "94390 Orly"
+    },
+    # New York Airports
+    "JFK": {
+        "name": "John F. Kennedy International Airport",
+        "cityName": "New York",
+        "countryCode": "US",
+        "geoCode": "40.6413,-73.7781",
+        "addressLine": "Queens, NY 11430"
+    },
+    "LGA": {
+        "name": "LaGuardia Airport",
+        "cityName": "New York",
+        "countryCode": "US",
+        "geoCode": "40.7769,-73.8740",
+        "addressLine": "Queens, NY 11371"
+    },
+    "EWR": {
+        "name": "Newark Liberty International Airport",
+        "cityName": "Newark",
+        "countryCode": "US",
+        "geoCode": "40.6895,-74.1745",
+        "addressLine": "Newark, NJ 07114"
+    },
+    # London Airports
+    "LHR": {
+        "name": "London Heathrow Airport",
+        "cityName": "London",
+        "countryCode": "GB",
+        "geoCode": "51.4700,-0.4543",
+        "addressLine": "Longford TW6, United Kingdom"
+    },
+    "LGW": {
+        "name": "London Gatwick Airport",
+        "cityName": "London",
+        "countryCode": "GB",
+        "geoCode": "51.1537,-0.1821",
+        "addressLine": "Horley RH6 0NP, United Kingdom"
+    },
+    "STN": {
+        "name": "London Stansted Airport",
+        "cityName": "London",
+        "countryCode": "GB",
+        "geoCode": "51.8860,0.2389",
+        "addressLine": "Stansted CM24 1QW, United Kingdom"
+    },
+    # Los Angeles
+    "LAX": {
+        "name": "Los Angeles International Airport",
+        "cityName": "Los Angeles",
+        "countryCode": "US",
+        "geoCode": "33.9416,-118.4085",
+        "addressLine": "1 World Way, Los Angeles, CA 90045"
+    },
+    # Tokyo Airports
+    "NRT": {
+        "name": "Narita International Airport",
+        "cityName": "Tokyo",
+        "countryCode": "JP",
+        "geoCode": "35.7720,140.3929",
+        "addressLine": "Narita, Chiba 282-0004"
+    },
+    "HND": {
+        "name": "Tokyo Haneda Airport",
+        "cityName": "Tokyo",
+        "countryCode": "JP",
+        "geoCode": "35.5494,139.7798",
+        "addressLine": "Ota City, Tokyo 144-0041"
+    },
+    # Other Major Airports
+    "SFO": {
+        "name": "San Francisco International Airport",
+        "cityName": "San Francisco",
+        "countryCode": "US",
+        "geoCode": "37.6213,-122.3790",
+        "addressLine": "San Francisco, CA 94128"
+    },
+    "MIA": {
+        "name": "Miami International Airport",
+        "cityName": "Miami",
+        "countryCode": "US",
+        "geoCode": "25.7959,-80.2870",
+        "addressLine": "Miami, FL 33126"
+    },
+    "DXB": {
+        "name": "Dubai International Airport",
+        "cityName": "Dubai",
+        "countryCode": "AE",
+        "geoCode": "25.2532,55.3657",
+        "addressLine": "Dubai, United Arab Emirates"
+    },
+    "FRA": {
+        "name": "Frankfurt Airport",
+        "cityName": "Frankfurt",
+        "countryCode": "DE",
+        "geoCode": "50.0379,8.5622",
+        "addressLine": "60547 Frankfurt"
+    },
+    "AMS": {
+        "name": "Amsterdam Schiphol Airport",
+        "cityName": "Amsterdam",
+        "countryCode": "NL",
+        "geoCode": "52.3105,4.7683",
+        "addressLine": "1118 Schiphol"
+    },
+    "MAD": {
+        "name": "Madrid-Barajas Airport",
+        "cityName": "Madrid",
+        "countryCode": "ES",
+        "geoCode": "40.4719,-3.5626",
+        "addressLine": "28042 Madrid"
+    },
+    "BCN": {
+        "name": "Barcelona-El Prat Airport",
+        "cityName": "Barcelona",
+        "countryCode": "ES",
+        "geoCode": "41.2974,2.0833",
+        "addressLine": "08820 El Prat de Llobregat, Barcelona"
+    },
+    "SIN": {
+        "name": "Singapore Changi Airport",
+        "cityName": "Singapore",
+        "countryCode": "SG",
+        "geoCode": "1.3644,103.9915",
+        "addressLine": "Airport Boulevard, Singapore"
+    },
+    "HKG": {
+        "name": "Hong Kong International Airport",
+        "cityName": "Hong Kong",
+        "countryCode": "HK",
+        "geoCode": "22.3080,113.9185",
+        "addressLine": "Hong Kong"
+    },
+    "ICN": {
+        "name": "Incheon International Airport",
+        "cityName": "Seoul",
+        "countryCode": "KR",
+        "geoCode": "37.4602,126.4407",
+        "addressLine": "Jung-gu, Incheon"
+    }
+}
+
+
+def format_location_for_transfer(location: str, is_start: bool = True) -> Dict[str, Any]:
+    """
+    Format a location string into the detailed format required by Amadeus Transfer API.
+
+    Args:
+        location: Airport IATA code, "lat,long", or address string
+        is_start: True if this is the start location, False for end location
+
+    Returns:
+        Dictionary with properly formatted location fields
+    """
+    location_upper = location.upper().strip()
+
+    # Check if it's an airport code in our database
+    if location_upper in AIRPORT_LOCATIONS:
+        airport_data = AIRPORT_LOCATIONS[location_upper]
+        if is_start:
+            # Start location can just use the airport code
+            return {"startLocationCode": location_upper}
+        else:
+            # End location needs full details
+            return {
+                "endLocationCode": location_upper,
+                "endAddressLine": airport_data["addressLine"],
+                "endCityName": airport_data["cityName"],
+                "endCountryCode": airport_data["countryCode"],
+                "endGeoCode": airport_data["geoCode"],
+                "endName": airport_data["name"]
+            }
+
+    # Check if it's coordinates (lat,long format)
+    if "," in location and len(location.split(",")) == 2:
+        try:
+            lat, lon = location.split(",")
+            float(lat.strip())
+            float(lon.strip())
+
+            if is_start:
+                return {"startGeoCode": location.strip()}
+            else:
+                return {"endGeoCode": location.strip()}
+        except ValueError:
+            pass
+
+    # Otherwise treat as address
+    if is_start:
+        return {"startAddressLine": location}
+    else:
+        return {"endAddressLine": location}
+
+
 @mcp.tool()
 async def search_transfers(
     start_location: str,
     end_location: str,
     transfer_type: str,
     start_date_time: str,
-    passengers: int = 1
+    passengers: int = 1,
+    duration: Optional[str] = None
 ) -> str:
     """
     Search for airport transfer options.
 
     Args:
-        start_location: Starting location - Airport IATA code (e.g., "JFK", "CDG") or address
-        end_location: Destination - address or lat,long coordinates (e.g., "48.8584,2.2945")
+        start_location: Starting location - Airport IATA code (e.g., "CDG", "JFK") or coordinates as "lat,long"
+        end_location: Destination - Airport IATA code, coordinates as "lat,long", or address
         transfer_type: Type of transfer service. Valid values are:
             - PRIVATE: Private transfer/car service (recommended for airport transfers)
             - TAXI: Taxi service
-            - HOURLY: Hourly rental service
+            - HOURLY: Hourly rental service (requires duration parameter)
+            - SHUTTLE: Shared shuttle service
+            - SHARED: Shared transfer service
         start_date_time: Start date and time in ISO 8601 format (e.g., "2024-11-20T10:30:00")
         passengers: Number of passengers, default 1
+        duration: Duration for HOURLY transfers in ISO 8601 format (e.g., "PT2H30M" for 2 hours 30 minutes)
 
     Returns:
         JSON string with available transfer options and prices
     """
     try:
+        # Format locations with complete information
+        start_fields = format_location_for_transfer(start_location, is_start=True)
+        end_fields = format_location_for_transfer(end_location, is_start=False)
+
         # Build transfer search payload
         payload = {
-            "startLocationCode": start_location,
-            "endAddressLine": end_location,
+            **start_fields,
+            **end_fields,
             "transferType": transfer_type.upper(),
             "startDateTime": start_date_time,
             "passengers": passengers
         }
+
+        # Add duration for HOURLY transfers
+        if transfer_type.upper() == "HOURLY":
+            if not duration:
+                return json.dumps({
+                    "error": "Duration is required for HOURLY transfer type. Use ISO 8601 format like 'PT2H30M' for 2 hours 30 minutes."
+                }, indent=2)
+            payload["duration"] = duration
 
         result = await amadeus_request(
             "POST",
@@ -1047,51 +1271,21 @@ async def search_transfers(
         return json.dumps({"error": str(e)}, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def book_transfer(
     offer_id: str,
     passenger_details: str
 ) -> str:
     """
-    Book an airport transfer.
+    [DISABLED] Book an airport transfer.
 
-    Args:
-        offer_id: Transfer offer ID from search results
-        passenger_details: JSON string with passenger info {name, phone, email}
-
-    Returns:
-        JSON string with transfer booking confirmation
+    This tool is disabled. Use search_transfers to find options,
+    then book directly with transfer companies or through travel websites.
     """
-    try:
-        passenger = json.loads(passenger_details)
-
-        payload = {
-            "data": {
-                "note": "Transfer booking",
-                "passengers": [passenger],
-                "agency": {
-                    "contacts": [passenger]
-                }
-            }
-        }
-
-        result = await amadeus_request(
-            "POST",
-            f"/v1/ordering/transfer-orders?offerId={offer_id}",
-            data=payload,
-            tool_name="BookTransfer"
-        )
-
-        log_info("BookTransfer", "Transfer booked successfully")
-        return json.dumps(result, indent=2)
-
-    except json.JSONDecodeError as e:
-        error_msg = f"Invalid passenger JSON: {e}"
-        log_error("BookTransfer", "InvalidInput", error_msg)
-        return json.dumps({"error": error_msg}, indent=2)
-    except Exception as e:
-        log_error("BookTransfer", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "Booking tools are disabled in this version. Use search_transfers for pricing, then book on transfer websites.",
+        "reason": "Test environment does not create real bookings"
+    }, indent=2)
 
 
 # ============================================================================
@@ -1389,7 +1583,7 @@ async def get_booking_insights(
         return json.dumps({"error": str(e)}, indent=2)
 
 
-@mcp.tool()
+# @mcp.tool()
 async def predict_trip_purpose(
     origin: str,
     destination: str,
@@ -1397,40 +1591,15 @@ async def predict_trip_purpose(
     return_date: Optional[str] = None
 ) -> str:
     """
-    Predict if a trip is for business or leisure.
+    [DISABLED] Predict if a trip is for business or leisure.
 
-    Args:
-        origin: Origin airport code
-        destination: Destination airport code
-        departure_date: Departure date in YYYY-MM-DD format
-        return_date: Optional return date for round trips
-
-    Returns:
-        JSON string with prediction (BUSINESS or LEISURE) and probability
+    This tool is disabled because users already know their trip purpose.
+    The AI prediction provides minimal practical value.
     """
-    try:
-        params = {
-            "originLocationCode": origin.upper(),
-            "destinationLocationCode": destination.upper(),
-            "departureDate": departure_date
-        }
-
-        if return_date:
-            params["returnDate"] = return_date
-
-        result = await amadeus_request(
-            "GET",
-            "/v1/travel/predictions/trip-purpose",
-            params=params,
-            tool_name="PredictTripPurpose"
-        )
-
-        log_info("PredictTripPurpose", "Trip purpose prediction completed")
-        return json.dumps(result, indent=2)
-
-    except Exception as e:
-        log_error("PredictTripPurpose", type(e).__name__, str(e))
-        return json.dumps({"error": str(e)}, indent=2)
+    return json.dumps({
+        "error": "predict_trip_purpose is disabled in this version.",
+        "reason": "Users already know their trip purpose; minimal practical value"
+    }, indent=2)
 
 
 # ============================================================================
