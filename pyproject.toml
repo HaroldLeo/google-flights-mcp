@@ -29,6 +29,7 @@ dependencies = [
     "mcp>=1.2.0",
     "fast-flights==2.2",
     "google-search-results>=2.4.2",
+    "aiohttp>=3.9.0",
 ]
 
 [project.optional-dependencies]
@@ -45,9 +46,10 @@ Issues = "https://github.com/HaroldLeo/google-flights-mcp/issues"
 
 [project.scripts]
 mcp-server-google-flights = "mcp_server_google_flights:main"
+mcp-server-amadeus = "mcp_server_amadeus:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mcp_server_google_flights"]
+packages = ["src/mcp_server_google_flights", "src/mcp_server_amadeus"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -16,7 +16,10 @@
 
 ## Overview
 
-Transform how you search for flights with AI assistance. This MCP server integrates Google Flights data directly into your AI workflow, enabling natural language flight searches, intelligent price comparisons, and automated travel planning through Claude and other MCP-compatible clients.
+Transform how you search for flights with AI assistance. This repository contains **two independent MCP servers** for comprehensive travel planning:
+
+### 🔵 Google Flights MCP Server
+Integrates Google Flights data directly into your AI workflow with natural language searches, intelligent price comparisons, and automated travel planning.
 
 **What you can do:**
 - Search flights with natural language queries
@@ -26,6 +29,27 @@ Transform how you search for flights with AI assistance. This MCP server integra
 - Filter by passengers, cabin class, and preferences
 
 Built on the powerful `fast-flights` library, this server provides 10 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
+
+### 🟢 Amadeus MCP Server (NEW!)
+Professional-grade travel API integration with **32 comprehensive tools** covering flights, hotels, tours, transfers, and market insights.
+
+**What you can do:**
+- Book flights, hotels, and airport transfers
+- Search tours and activities worldwide
+- AI-powered price analysis and delay predictions
+- Real-time flight status and tracking
+- Hotel ratings and sentiment analysis
+- Market insights and travel trends
+
+See [AMADEUS_README.md](AMADEUS_README.md) for complete Amadeus documentation.
+
+### 📊 Which Server Should You Use?
+
+- **Google Flights:** Quick flight searches, free, no API key required
+- **Amadeus:** Complete bookings, hotels, activities, professional features
+- **Both Together:** Maximum coverage and flexibility
+
+See [COMPARISON.md](COMPARISON.md) for detailed comparison and usage scenarios.
 
 ---
 
@@ -169,7 +193,7 @@ The server uses STDIO transport and will wait for MCP client connections.
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
-#### If installed via PyPI (uvx/pip):
+#### Google Flights Server Only (Simple Setup)
 
 ```json
 {
@@ -177,6 +201,29 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
     "google-flights": {
       "command": "uvx",
       "args": ["mcp-server-google-flights"]
+    }
+  }
+}
+```
+
+#### Both Servers Together (Recommended for Full Coverage)
+
+```json
+{
+  "mcpServers": {
+    "google-flights": {
+      "command": "mcp-server-google-flights",
+      "env": {
+        "SERPAPI_API_KEY": "optional_serpapi_key"
+      }
+    },
+    "amadeus": {
+      "command": "mcp-server-amadeus",
+      "env": {
+        "AMADEUS_CLIENT_ID": "your_amadeus_client_id",
+        "AMADEUS_CLIENT_SECRET": "your_amadeus_client_secret",
+        "AMADEUS_ENV": "test"
+      }
     }
   }
 }
@@ -190,6 +237,15 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
     "google-flights": {
       "command": "/absolute/path/to/.venv/bin/python",
       "args": ["/absolute/path/to/google-flights-mcp/src/mcp_server_google_flights/server.py"]
+    },
+    "amadeus": {
+      "command": "/absolute/path/to/.venv/bin/python",
+      "args": ["/absolute/path/to/google-flights-mcp/src/mcp_server_amadeus/server.py"],
+      "env": {
+        "AMADEUS_CLIENT_ID": "your_client_id",
+        "AMADEUS_CLIENT_SECRET": "your_secret",
+        "AMADEUS_ENV": "test"
+      }
     }
   }
 }
