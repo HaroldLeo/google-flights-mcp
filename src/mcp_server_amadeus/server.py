@@ -208,7 +208,10 @@ async def search_flights(
         included_airline_codes: Comma-separated airline IATA codes to filter (e.g., "AA,UA,DL")
 
     Returns:
-        JSON string with flight offers including prices, airlines, and itineraries
+        JSON string with flight offers including prices, airlines, and itineraries.
+        The response includes:
+        - 'offers': Simplified summary format for easy reading
+        - 'raw_offers': Complete flight offer data from Amadeus API for use with confirm_flight_price
     """
     try:
         params = {
@@ -258,7 +261,8 @@ async def search_flights(
             },
             "results_count": len(offers),
             "currency": currency_code.upper(),
-            "offers": []
+            "offers": [],
+            "raw_offers": offers[:max_results]  # Include complete raw offers for use with confirm_flight_price
         }
 
         # Extract key information from each offer
@@ -366,21 +370,58 @@ async def confirm_flight_price(flight_offer_data: str) -> str:
     Confirm the pricing of a flight offer before booking.
 
     This validates that the price is still available and provides detailed tax breakdown.
-    Use the flight offer data from search_flights results.
 
-    IMPORTANT: This function automatically removes aircraft codes from the request
-    because the Amadeus pricing API frequently rejects aircraft codes that are
-    returned by the search API (Error 400/477 - "Invalid data format at aircraft field").
-    Aircraft codes are optional for pricing confirmation.
+    IMPORTANT:
+    - Use the COMPLETE raw flight offer from 'raw_offers' field in search_flights results
+    - Do NOT use the simplified 'offers' summary - it's missing required fields
+    - This function automatically removes aircraft codes to prevent API validation errors
+    - The pricing API requires: travelerPricings, source, and segment id fields
+
+    Example usage:
+        search_result = search_flights("JFK", "LAX", "2024-12-15")
+        parsed = json.loads(search_result)
+        first_raw_offer = parsed["raw_offers"][0]  # Use raw_offers, not offers
+        confirm_flight_price(json.dumps(first_raw_offer))
 
     Args:
-        flight_offer_data: JSON string containing the complete flight offer object from search results
+        flight_offer_data: JSON string containing the COMPLETE raw flight offer from
+                          the 'raw_offers' field of search_flights results
 
     Returns:
         JSON string with confirmed pricing and detailed tax information
     """
     try:
         offer = json.loads(flight_offer_data)
+
+        # Validate that this is complete raw offer data, not simplified summary
+        missing_fields = []
+        if "travelerPricings" not in offer:
+            missing_fields.append("travelerPricings")
+        if "source" not in offer:
+            missing_fields.append("source")
+
+        # Check if segments have IDs
+        if "itineraries" in offer:
+            for itin_idx, itin in enumerate(offer["itineraries"]):
+                if "segments" in itin:
+                    for seg_idx, seg in enumerate(itin["segments"]):
+                        if "id" not in seg:
+                            missing_fields.append(f"itineraries[{itin_idx}].segments[{seg_idx}].id")
+                            break
+                    if missing_fields:
+                        break
+
+        if missing_fields:
+            return json.dumps({
+                "error": "Invalid flight offer format - missing required fields for pricing API",
+                "missing_fields": missing_fields,
+                "details": "You are likely passing the simplified 'offers' summary instead of the complete 'raw_offers' data",
+                "solution": "Use the 'raw_offers' field from search_flights results, not the 'offers' field",
+                "example": {
+                    "wrong": "search_result['offers'][0]  # Missing required fields",
+                    "correct": "search_result['raw_offers'][0]  # Complete data with all required fields"
+                }
+            }, indent=2)
 
         # Sanitize the offer data to remove potentially problematic fields
         sanitized_offer = sanitize_flight_offer_for_pricing(offer)
@@ -1323,16 +1364,17 @@ AIRPORT_LOCATIONS = {
 }
 
 
-def format_location_for_transfer(location: str, is_start: bool = True) -> Dict[str, Any]:
+def format_location_for_transfer(location: str, is_start: bool = True) -> tuple[Dict[str, Any], Optional[str]]:
     """
     Format a location string into the detailed format required by Amadeus Transfer API.
 
     Args:
-        location: Airport IATA code, "lat,long", or address string
+        location: Airport IATA code or coordinates in "lat,long" format
         is_start: True if this is the start location, False for end location
 
     Returns:
-        Dictionary with properly formatted location fields
+        Tuple of (formatted_location_dict, error_message)
+        If error_message is not None, the location format is invalid
     """
     location_upper = location.upper().strip()
 
@@ -1341,7 +1383,7 @@ def format_location_for_transfer(location: str, is_start: bool = True) -> Dict[s
         airport_data = AIRPORT_LOCATIONS[location_upper]
         if is_start:
             # Start location can just use the airport code
-            return {"startLocationCode": location_upper}
+            return {"startLocationCode": location_upper}, None
         else:
             # End location needs full details
             return {
@@ -1351,27 +1393,49 @@ def format_location_for_transfer(location: str, is_start: bool = True) -> Dict[s
                 "endCountryCode": airport_data["countryCode"],
                 "endGeoCode": airport_data["geoCode"],
                 "endName": airport_data["name"]
-            }
+            }, None
 
     # Check if it's coordinates (lat,long format)
     if "," in location and len(location.split(",")) == 2:
         try:
             lat, lon = location.split(",")
-            float(lat.strip())
-            float(lon.strip())
+            lat_float = float(lat.strip())
+            lon_float = float(lon.strip())
+
+            # Validate coordinate ranges
+            if not (-90 <= lat_float <= 90) or not (-180 <= lon_float <= 180):
+                return {}, f"Invalid coordinates: latitude must be -90 to 90, longitude must be -180 to 180"
 
             if is_start:
-                return {"startGeoCode": location.strip()}
+                return {"startGeoCode": location.strip()}, None
             else:
-                return {"endGeoCode": location.strip()}
+                return {"endGeoCode": location.strip()}, None
         except ValueError:
-            pass
+            # Looks like coordinates but isn't valid - provide helpful error
+            return {}, f"Invalid coordinate format: '{location}'. Expected format: 'latitude,longitude' (e.g., '40.7128,-74.0060')"
 
-    # Otherwise treat as address
-    if is_start:
-        return {"startAddressLine": location}
-    else:
-        return {"endAddressLine": location}
+    # If we get here, it's likely a free-text address which is not supported
+    location_type = "start" if is_start else "end"
+
+    # Check if it looks like an airport code that's not in our database
+    if len(location_upper) == 3 and location_upper.isalpha():
+        available_airports = ", ".join(sorted(AIRPORT_LOCATIONS.keys())[:10]) + "..."
+        return {}, (
+            f"Airport code '{location_upper}' not found in database. "
+            f"Available airports: {available_airports}. "
+            f"See full list at: src/mcp_server_amadeus/server.py:AIRPORT_LOCATIONS"
+        )
+
+    # It's a free-text address
+    return {}, (
+        f"Invalid {location_type}_location format: '{location}'. "
+        f"The Amadeus Transfer API requires either:\n"
+        f"  1. Airport code (e.g., 'JFK', 'CDG', 'LHR') - supported airports listed in AIRPORT_LOCATIONS\n"
+        f"  2. Coordinates in 'latitude,longitude' format (e.g., '40.7128,-74.0060')\n"
+        f"\n"
+        f"Free-text addresses are NOT supported because they lack required location data "
+        f"(city, country code, geocode). Please convert addresses to coordinates first."
+    )
 
 
 @mcp.tool()
@@ -1386,9 +1450,20 @@ async def search_transfers(
     """
     Search for airport transfer options.
 
+    IMPORTANT - Location Format Requirements:
+    Both start_location and end_location must be in one of these formats:
+    1. Airport IATA code (e.g., "JFK", "CDG", "LHR") - only supported airports in database
+    2. Coordinates as "latitude,longitude" (e.g., "40.7128,-74.0060")
+
+    Free-text addresses (e.g., "Times Square") are NOT supported because the Amadeus API
+    requires complete location data (city, country, geocode). Use coordinates instead.
+
+    Supported airports: CDG, ORY, JFK, LGA, EWR, LHR, LGW, STN, LAX, NRT, HND, SFO, MIA,
+    DXB, FRA, AMS, MAD, BCN, SIN, HKG, ICN (see AIRPORT_LOCATIONS for complete list)
+
     Args:
-        start_location: Starting location - Airport IATA code (e.g., "CDG", "JFK") or coordinates as "lat,long"
-        end_location: Destination - Airport IATA code, coordinates as "lat,long", or address
+        start_location: Airport code (e.g., "JFK") OR coordinates (e.g., "40.7128,-74.0060")
+        end_location: Airport code (e.g., "LHR") OR coordinates (e.g., "51.5074,-0.1278")
         transfer_type: Type of transfer service. Valid values are:
             - PRIVATE: Private transfer/car service (recommended for airport transfers)
             - TAXI: Taxi service
@@ -1400,12 +1475,25 @@ async def search_transfers(
         duration: Duration for HOURLY transfers in ISO 8601 format (e.g., "PT2H30M" for 2 hours 30 minutes)
 
     Returns:
-        JSON string with available transfer options and prices
+        JSON string with available transfer options and prices, or error if location format invalid
     """
     try:
-        # Format locations with complete information
-        start_fields = format_location_for_transfer(start_location, is_start=True)
-        end_fields = format_location_for_transfer(end_location, is_start=False)
+        # Validate and format locations with complete information
+        start_fields, start_error = format_location_for_transfer(start_location, is_start=True)
+        if start_error:
+            return json.dumps({
+                "error": "Invalid start_location format",
+                "details": start_error,
+                "provided_value": start_location
+            }, indent=2)
+
+        end_fields, end_error = format_location_for_transfer(end_location, is_start=False)
+        if end_error:
+            return json.dumps({
+                "error": "Invalid end_location format",
+                "details": end_error,
+                "provided_value": end_location
+            }, indent=2)
 
         # Build transfer search payload
         payload = {
