@@ -997,39 +997,264 @@ async def get_activity_details(activity_id: str) -> str:
 # TRANSFERS
 # ============================================================================
 
+# Airport location database with complete information for transfer API
+AIRPORT_LOCATIONS = {
+    # Paris Airports
+    "CDG": {
+        "name": "Paris Charles de Gaulle Airport",
+        "cityName": "Paris",
+        "countryCode": "FR",
+        "geoCode": "49.0097,2.5479",
+        "addressLine": "95700 Roissy-en-France"
+    },
+    "ORY": {
+        "name": "Paris Orly Airport",
+        "cityName": "Paris",
+        "countryCode": "FR",
+        "geoCode": "48.7233,2.3794",
+        "addressLine": "94390 Orly"
+    },
+    # New York Airports
+    "JFK": {
+        "name": "John F. Kennedy International Airport",
+        "cityName": "New York",
+        "countryCode": "US",
+        "geoCode": "40.6413,-73.7781",
+        "addressLine": "Queens, NY 11430"
+    },
+    "LGA": {
+        "name": "LaGuardia Airport",
+        "cityName": "New York",
+        "countryCode": "US",
+        "geoCode": "40.7769,-73.8740",
+        "addressLine": "Queens, NY 11371"
+    },
+    "EWR": {
+        "name": "Newark Liberty International Airport",
+        "cityName": "Newark",
+        "countryCode": "US",
+        "geoCode": "40.6895,-74.1745",
+        "addressLine": "Newark, NJ 07114"
+    },
+    # London Airports
+    "LHR": {
+        "name": "London Heathrow Airport",
+        "cityName": "London",
+        "countryCode": "GB",
+        "geoCode": "51.4700,-0.4543",
+        "addressLine": "Longford TW6, United Kingdom"
+    },
+    "LGW": {
+        "name": "London Gatwick Airport",
+        "cityName": "London",
+        "countryCode": "GB",
+        "geoCode": "51.1537,-0.1821",
+        "addressLine": "Horley RH6 0NP, United Kingdom"
+    },
+    "STN": {
+        "name": "London Stansted Airport",
+        "cityName": "London",
+        "countryCode": "GB",
+        "geoCode": "51.8860,0.2389",
+        "addressLine": "Stansted CM24 1QW, United Kingdom"
+    },
+    # Los Angeles
+    "LAX": {
+        "name": "Los Angeles International Airport",
+        "cityName": "Los Angeles",
+        "countryCode": "US",
+        "geoCode": "33.9416,-118.4085",
+        "addressLine": "1 World Way, Los Angeles, CA 90045"
+    },
+    # Tokyo Airports
+    "NRT": {
+        "name": "Narita International Airport",
+        "cityName": "Tokyo",
+        "countryCode": "JP",
+        "geoCode": "35.7720,140.3929",
+        "addressLine": "Narita, Chiba 282-0004"
+    },
+    "HND": {
+        "name": "Tokyo Haneda Airport",
+        "cityName": "Tokyo",
+        "countryCode": "JP",
+        "geoCode": "35.5494,139.7798",
+        "addressLine": "Ota City, Tokyo 144-0041"
+    },
+    # Other Major Airports
+    "SFO": {
+        "name": "San Francisco International Airport",
+        "cityName": "San Francisco",
+        "countryCode": "US",
+        "geoCode": "37.6213,-122.3790",
+        "addressLine": "San Francisco, CA 94128"
+    },
+    "MIA": {
+        "name": "Miami International Airport",
+        "cityName": "Miami",
+        "countryCode": "US",
+        "geoCode": "25.7959,-80.2870",
+        "addressLine": "Miami, FL 33126"
+    },
+    "DXB": {
+        "name": "Dubai International Airport",
+        "cityName": "Dubai",
+        "countryCode": "AE",
+        "geoCode": "25.2532,55.3657",
+        "addressLine": "Dubai, United Arab Emirates"
+    },
+    "FRA": {
+        "name": "Frankfurt Airport",
+        "cityName": "Frankfurt",
+        "countryCode": "DE",
+        "geoCode": "50.0379,8.5622",
+        "addressLine": "60547 Frankfurt"
+    },
+    "AMS": {
+        "name": "Amsterdam Schiphol Airport",
+        "cityName": "Amsterdam",
+        "countryCode": "NL",
+        "geoCode": "52.3105,4.7683",
+        "addressLine": "1118 Schiphol"
+    },
+    "MAD": {
+        "name": "Madrid-Barajas Airport",
+        "cityName": "Madrid",
+        "countryCode": "ES",
+        "geoCode": "40.4719,-3.5626",
+        "addressLine": "28042 Madrid"
+    },
+    "BCN": {
+        "name": "Barcelona-El Prat Airport",
+        "cityName": "Barcelona",
+        "countryCode": "ES",
+        "geoCode": "41.2974,2.0833",
+        "addressLine": "08820 El Prat de Llobregat, Barcelona"
+    },
+    "SIN": {
+        "name": "Singapore Changi Airport",
+        "cityName": "Singapore",
+        "countryCode": "SG",
+        "geoCode": "1.3644,103.9915",
+        "addressLine": "Airport Boulevard, Singapore"
+    },
+    "HKG": {
+        "name": "Hong Kong International Airport",
+        "cityName": "Hong Kong",
+        "countryCode": "HK",
+        "geoCode": "22.3080,113.9185",
+        "addressLine": "Hong Kong"
+    },
+    "ICN": {
+        "name": "Incheon International Airport",
+        "cityName": "Seoul",
+        "countryCode": "KR",
+        "geoCode": "37.4602,126.4407",
+        "addressLine": "Jung-gu, Incheon"
+    }
+}
+
+
+def format_location_for_transfer(location: str, is_start: bool = True) -> Dict[str, Any]:
+    """
+    Format a location string into the detailed format required by Amadeus Transfer API.
+
+    Args:
+        location: Airport IATA code, "lat,long", or address string
+        is_start: True if this is the start location, False for end location
+
+    Returns:
+        Dictionary with properly formatted location fields
+    """
+    location_upper = location.upper().strip()
+
+    # Check if it's an airport code in our database
+    if location_upper in AIRPORT_LOCATIONS:
+        airport_data = AIRPORT_LOCATIONS[location_upper]
+        if is_start:
+            # Start location can just use the airport code
+            return {"startLocationCode": location_upper}
+        else:
+            # End location needs full details
+            return {
+                "endLocationCode": location_upper,
+                "endAddressLine": airport_data["addressLine"],
+                "endCityName": airport_data["cityName"],
+                "endCountryCode": airport_data["countryCode"],
+                "endGeoCode": airport_data["geoCode"],
+                "endName": airport_data["name"]
+            }
+
+    # Check if it's coordinates (lat,long format)
+    if "," in location and len(location.split(",")) == 2:
+        try:
+            lat, lon = location.split(",")
+            float(lat.strip())
+            float(lon.strip())
+
+            if is_start:
+                return {"startGeoCode": location.strip()}
+            else:
+                return {"endGeoCode": location.strip()}
+        except ValueError:
+            pass
+
+    # Otherwise treat as address
+    if is_start:
+        return {"startAddressLine": location}
+    else:
+        return {"endAddressLine": location}
+
+
 @mcp.tool()
 async def search_transfers(
     start_location: str,
     end_location: str,
     transfer_type: str,
     start_date_time: str,
-    passengers: int = 1
+    passengers: int = 1,
+    duration: Optional[str] = None
 ) -> str:
     """
     Search for airport transfer options.
 
     Args:
-        start_location: Starting location - Airport IATA code (e.g., "JFK", "CDG") or address
-        end_location: Destination - address or lat,long coordinates (e.g., "48.8584,2.2945")
+        start_location: Starting location - Airport IATA code (e.g., "CDG", "JFK") or coordinates as "lat,long"
+        end_location: Destination - Airport IATA code, coordinates as "lat,long", or address
         transfer_type: Type of transfer service. Valid values are:
             - PRIVATE: Private transfer/car service (recommended for airport transfers)
             - TAXI: Taxi service
-            - HOURLY: Hourly rental service
+            - HOURLY: Hourly rental service (requires duration parameter)
+            - SHUTTLE: Shared shuttle service
+            - SHARED: Shared transfer service
         start_date_time: Start date and time in ISO 8601 format (e.g., "2024-11-20T10:30:00")
         passengers: Number of passengers, default 1
+        duration: Duration for HOURLY transfers in ISO 8601 format (e.g., "PT2H30M" for 2 hours 30 minutes)
 
     Returns:
         JSON string with available transfer options and prices
     """
     try:
+        # Format locations with complete information
+        start_fields = format_location_for_transfer(start_location, is_start=True)
+        end_fields = format_location_for_transfer(end_location, is_start=False)
+
         # Build transfer search payload
         payload = {
-            "startLocationCode": start_location,
-            "endAddressLine": end_location,
+            **start_fields,
+            **end_fields,
             "transferType": transfer_type.upper(),
             "startDateTime": start_date_time,
             "passengers": passengers
         }
+
+        # Add duration for HOURLY transfers
+        if transfer_type.upper() == "HOURLY":
+            if not duration:
+                return json.dumps({
+                    "error": "Duration is required for HOURLY transfer type. Use ISO 8601 format like 'PT2H30M' for 2 hours 30 minutes."
+                }, indent=2)
+            payload["duration"] = duration
 
         result = await amadeus_request(
             "POST",

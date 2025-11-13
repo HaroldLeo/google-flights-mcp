@@ -33,7 +33,10 @@ A comprehensive Model Context Protocol (MCP) server providing access to the comp
 - `get_activity_details` - Get detailed activity information
 
 ### Transfers (2 tools)
-- `search_transfers` - Search airport transfers and ground transportation (valid types: PRIVATE, TAXI, HOURLY)
+- `search_transfers` - Search airport transfers and ground transportation (valid types: PRIVATE, TAXI, HOURLY, SHUTTLE, SHARED)
+  - Supports airport-to-airport transfers with automatic location formatting
+  - Includes database of 20+ major airports with complete address and coordinate information
+  - Automatically adds required location details (city, country code, coordinates) for API compatibility
 - `book_transfer` - Book transfer services
 
 ### Reference Data (6 tools)
@@ -144,6 +147,11 @@ Once connected, you can ask Claude:
 **Activities:**
 - "What tours and activities are available near the Louvre Museum?"
 - "Find things to do in Rome city center"
+
+**Transfers:**
+- "Search for transfers from CDG airport to ORY airport"
+- "Find a private car from JFK to Manhattan"
+- "What taxi options are available from Heathrow to central London?"
 
 **Travel Insights:**
 - "What are the most popular destinations from San Francisco?"
