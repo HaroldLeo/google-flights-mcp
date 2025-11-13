@@ -1009,11 +1009,12 @@ async def search_transfers(
     Search for airport transfer options.
 
     Args:
-        start_location: Starting location - format depends on transfer_type:
-            - For AIRPORT_TRANSFER: Airport IATA code (e.g., "JFK")
-            - For PRIVATE: Address or lat,long
-        end_location: Destination - address or lat,long coordinates
-        transfer_type: Type of transfer - AIRPORT_TRANSFER, PRIVATE, HOURLY, etc.
+        start_location: Starting location - Airport IATA code (e.g., "JFK", "CDG") or address
+        end_location: Destination - address or lat,long coordinates (e.g., "48.8584,2.2945")
+        transfer_type: Type of transfer service. Valid values are:
+            - PRIVATE: Private transfer/car service (recommended for airport transfers)
+            - TAXI: Taxi service
+            - HOURLY: Hourly rental service
         start_date_time: Start date and time in ISO 8601 format (e.g., "2024-11-20T10:30:00")
         passengers: Number of passengers, default 1
 

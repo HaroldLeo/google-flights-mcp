@@ -33,7 +33,7 @@ A comprehensive Model Context Protocol (MCP) server providing access to the comp
 - `get_activity_details` - Get detailed activity information
 
 ### Transfers (2 tools)
-- `search_transfers` - Search airport transfers and ground transportation
+- `search_transfers` - Search airport transfers and ground transportation (valid types: PRIVATE, TAXI, HOURLY)
 - `book_transfer` - Book transfer services
 
 ### Reference Data (6 tools)

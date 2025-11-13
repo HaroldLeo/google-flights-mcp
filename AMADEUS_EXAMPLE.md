@@ -282,11 +282,13 @@ get_activity_details(
 search_transfers(
     start_location="JFK",
     end_location="Times Square, New York, NY",
-    transfer_type="AIRPORT_TRANSFER",
+    transfer_type="PRIVATE",
     start_date_time="2024-12-15T15:00:00",
     passengers=2
 )
 ```
+
+**Note:** Valid transfer_type values are PRIVATE, TAXI, or HOURLY. Use PRIVATE for airport transfers.
 
 ---
 
@@ -387,7 +389,7 @@ get_hotel_offers(hotel_ids="...", check_in_date="2024-12-15",
 ```python
 search_transfers(start_location="CDG",
                 end_location="48.8584,2.2945",
-                transfer_type="AIRPORT_TRANSFER",
+                transfer_type="PRIVATE",
                 start_date_time="2024-12-15T10:00:00")
 ```
 
