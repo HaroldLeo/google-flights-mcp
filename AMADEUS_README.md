@@ -4,15 +4,10 @@ A comprehensive Model Context Protocol (MCP) server providing access to the comp
 
 ## Features
 
-### Flight APIs (14 tools)
-- **Flight Search & Booking**
+### Flight APIs (11 tools)
+- **Flight Search & Discovery**
   - `search_flights` - Search for flight offers with flexible parameters
   - `confirm_flight_price` - Validate pricing before booking
-  - `book_flight` - Create flight reservations
-  - `get_flight_order` - Retrieve booking details
-  - `cancel_flight_order` - Cancel reservations
-
-- **Flight Discovery**
   - `flight_inspiration_search` - Discover destinations from an origin
   - `flight_cheapest_dates` - Find cheapest dates to travel
 
@@ -21,20 +16,21 @@ A comprehensive Model Context Protocol (MCP) server providing access to the comp
   - `predict_flight_delay` - Forecast flight delays
   - `get_flight_status` - Real-time flight tracking
 
-### Hotel APIs (5 tools)
+### Hotel APIs (4 tools)
 - `search_hotels_by_city` - Find hotels in a city
 - `search_hotels_by_location` - Find hotels near coordinates
 - `get_hotel_offers` - Search availability and rates
-- `book_hotel` - Make hotel reservations
 - `get_hotel_ratings` - Sentiment-based hotel ratings
 
 ### Tours & Activities (2 tools)
 - `search_activities` - Find tours and activities by location
 - `get_activity_details` - Get detailed activity information
 
-### Transfers (2 tools)
-- `search_transfers` - Search airport transfers and ground transportation (valid types: PRIVATE, TAXI, HOURLY)
-- `book_transfer` - Book transfer services
+### Transfers (1 tool)
+- `search_transfers` - Search airport transfers and ground transportation (valid types: PRIVATE, TAXI, HOURLY, SHUTTLE, SHARED)
+  - Supports airport-to-airport transfers with automatic location formatting
+  - Includes database of 20+ major airports with complete address and coordinate information
+  - Automatically adds required location details (city, country code, coordinates) for API compatibility
 
 ### Reference Data (6 tools)
 - `search_airports` - Find airports by keyword
@@ -44,12 +40,18 @@ A comprehensive Model Context Protocol (MCP) server providing access to the comp
 - `get_airline_routes` - Get airline route networks
 - `get_airport_routes` - Get airport destinations
 
-### Market Insights (3 tools)
+### Market Insights (2 tools)
 - `get_travel_insights` - Most traveled destinations
 - `get_booking_insights` - Most booked destinations
-- `predict_trip_purpose` - Business vs Leisure prediction
 
-**Total: 32 MCP Tools** covering the full Amadeus API ecosystem
+**Total: 26 MCP Tools** - Focused on practical search and discovery features
+
+### Disabled Tools
+The following tools are disabled but remain in the codebase for reference:
+- ❌ **Booking tools** (5): `book_flight`, `book_hotel`, `book_transfer`, `get_flight_order`, `cancel_flight_order`
+  - Reason: Test environment doesn't create real bookings; users prefer booking on airline/hotel websites directly
+- ❌ **predict_trip_purpose**: AI prediction of business vs leisure travel
+  - Reason: Users already know their trip purpose; minimal practical value
 
 ## Installation
 
@@ -144,6 +146,11 @@ Once connected, you can ask Claude:
 **Activities:**
 - "What tours and activities are available near the Louvre Museum?"
 - "Find things to do in Rome city center"
+
+**Transfers:**
+- "Search for transfers from CDG airport to ORY airport"
+- "Find a private car from JFK to Manhattan"
+- "What taxi options are available from Heathrow to central London?"
 
 **Travel Insights:**
 - "What are the most popular destinations from San Francisco?"
@@ -362,6 +369,18 @@ Built with:
 - [FastMCP](https://github.com/jlowin/fastmcp)
 
 ## Changelog
+
+### Version 0.2.0 (Simplified & Focused)
+- **Simplified to 26 MCP tools** - Removed 6 low-value tools
+- **Disabled booking tools** (book_flight, book_hotel, book_transfer, get_flight_order, cancel_flight_order)
+  - Test environment limitations
+  - Users prefer booking on provider websites directly
+- **Removed predict_trip_purpose** - Users already know their trip purpose
+- **Enhanced tools:**
+  - Transfer API with 20+ airport location database
+  - Flight price confirmation with auto-sanitization
+  - Hotel ratings with better error handling
+- **Focus:** Search & discovery (not booking)
 
 ### Version 0.1.0 (Initial Release)
 - 32 MCP tools covering full Amadeus API
