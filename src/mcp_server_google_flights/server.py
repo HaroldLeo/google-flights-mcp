@@ -1992,43 +1992,93 @@ async def search_round_trips_in_date_range(
             log_info(TOOL, f"Progress: {count}/{total_combinations} - {depart_date.strftime('%Y-%m-%d')}→{return_date.strftime('%Y-%m-%d')}")
 
         try:
-            flight_data = [
-                FlightData(date=depart_date.strftime('%Y-%m-%d'), from_airport=origin, to_airport=destination),
-                FlightData(date=return_date.strftime('%Y-%m-%d'), from_airport=destination, to_airport=origin),
-            ]
-            passengers_info = Passengers(adults=adults)
-
-            result = get_flights(
-                flight_data=flight_data,
-                trip="round-trip",
-                seat=seat_type,
-                passengers=passengers_info,
-                fetch_mode="common",
-                max_stops=max_stops
-            )
-
             # Generate booking URL for this date pair
             date_pair_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{depart_date.strftime('%Y-%m-%d')}%20to%20{return_date.strftime('%Y-%m-%d')}"
+
+            # TRY SERPAPI FIRST (primary method) for this date pair
+            result = None
+            source = "fast-flights"  # Track which method succeeded
+
+            if SERPAPI_ENABLED:
+                serpapi_result = get_flights_from_serpapi(
+                    origin=origin,
+                    destination=destination,
+                    departure_date=depart_date.strftime('%Y-%m-%d'),
+                    return_date=return_date.strftime('%Y-%m-%d'),
+                    adults=adults,
+                    seat_type=seat_type,
+                    max_stops=max_stops
+                )
+
+                if serpapi_result:
+                    flights_data = convert_serpapi_response(serpapi_result)
+                    if flights_data:
+                        # Convert to a format compatible with the rest of the code
+                        # Create a simple object with flights attribute
+                        class FlightResult:
+                            def __init__(self, flights):
+                                self.flights = flights
+
+                        # Convert dict flights back to objects for compatibility
+                        result = FlightResult(flights_data)
+                        source = "SerpApi"
+
+            # FALLBACK: Try fast-flights if SerpApi didn't work
+            if not result:
+                flight_data = [
+                    FlightData(date=depart_date.strftime('%Y-%m-%d'), from_airport=origin, to_airport=destination),
+                    FlightData(date=return_date.strftime('%Y-%m-%d'), from_airport=destination, to_airport=origin),
+                ]
+                passengers_info = Passengers(adults=adults)
+
+                result = get_flights(
+                    flight_data=flight_data,
+                    trip="round-trip",
+                    seat=seat_type,
+                    passengers=passengers_info,
+                    fetch_mode="common",
+                    max_stops=max_stops
+                )
 
             # Collect results based on mode
             if result and result.flights:
                 if return_cheapest_only:
                     # Find and store only the cheapest for this pair
-                    cheapest_flight_for_pair = min(result.flights, key=lambda f: parse_price(f.price))
-                    results_data.append({
-                        "departure_date": depart_date.strftime('%Y-%m-%d'),
-                        "return_date": return_date.strftime('%Y-%m-%d'),
-                        "cheapest_flight": flight_to_dict(cheapest_flight_for_pair), # Store single cheapest
-                        "booking_url": date_pair_url
-                    })
+                    if source == "SerpApi":
+                        # SerpApi returns dicts, use dict access
+                        cheapest_flight_for_pair = min(result.flights, key=lambda f: parse_price(f.get("price")))
+                        results_data.append({
+                            "departure_date": depart_date.strftime('%Y-%m-%d'),
+                            "return_date": return_date.strftime('%Y-%m-%d'),
+                            "cheapest_flight": cheapest_flight_for_pair,
+                            "booking_url": date_pair_url,
+                            "source": source
+                        })
+                    else:
+                        # fast-flights returns objects, use object access
+                        cheapest_flight_for_pair = min(result.flights, key=lambda f: parse_price(f.price))
+                        results_data.append({
+                            "departure_date": depart_date.strftime('%Y-%m-%d'),
+                            "return_date": return_date.strftime('%Y-%m-%d'),
+                            "cheapest_flight": flight_to_dict(cheapest_flight_for_pair),
+                            "booking_url": date_pair_url,
+                            "source": source
+                        })
                 else:
                     # Store all flights for this pair
-                    flights_list = [flight_to_dict(f) for f in result.flights]
+                    if source == "SerpApi":
+                        # Already dicts, no conversion needed
+                        flights_list = result.flights
+                    else:
+                        # Convert fast-flights objects to dicts
+                        flights_list = [flight_to_dict(f) for f in result.flights]
+
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
-                        "flights": flights_list, # Store list of all flights
-                        "booking_url": date_pair_url
+                        "flights": flights_list,
+                        "booking_url": date_pair_url,
+                        "source": source
                     })
             # else: # Optional: Log if no flights were found for a specific pair
                 # print(f"MCP Tool: No flights found for {depart_date.strftime('%Y-%m-%d')} -> {return_date.strftime('%Y-%m-%d')}", file=sys.stderr)
@@ -2038,48 +2088,7 @@ async def search_round_trips_in_date_range(
             error_msg = str(e)
             log_error(TOOL, "RuntimeError", f"{date_str}: {error_msg[:100]}")
 
-            # Try SerpApi fallback for this date pair
-            fallback_result = try_serpapi_fallback(
-                tool_name=TOOL,
-                origin=origin,
-                destination=destination,
-                departure_date=depart_date.strftime('%Y-%m-%d'),
-                return_date=return_date.strftime('%Y-%m-%d'),
-                adults=adults,
-                seat_type=seat_type,
-                max_stops=max_stops,
-                return_cheapest_only=return_cheapest_only,
-                max_results=max_results if not return_cheapest_only else 10
-            )
-
-            if fallback_result:
-                # Parse the fallback result and add to results_data
-                try:
-                    fallback_data = json.loads(fallback_result)
-                    if "flights" in fallback_data or "cheapest_flight" in fallback_data:
-                        log_info(TOOL, f"SerpApi fallback successful for {date_str}")
-                        # Add the flights from fallback to results
-                        if return_cheapest_only and "cheapest_flight" in fallback_data:
-                            results_data.append({
-                                "departure_date": depart_date.strftime('%Y-%m-%d'),
-                                "return_date": return_date.strftime('%Y-%m-%d'),
-                                "cheapest_flight": fallback_data["cheapest_flight"],
-                                "booking_url": fallback_data.get("booking_url", date_pair_url),
-                                "source": "serpapi"
-                            })
-                        elif "flights" in fallback_data:
-                            results_data.append({
-                                "departure_date": depart_date.strftime('%Y-%m-%d'),
-                                "return_date": return_date.strftime('%Y-%m-%d'),
-                                "flights": fallback_data["flights"],
-                                "booking_url": fallback_data.get("booking_url", date_pair_url),
-                                "source": "serpapi"
-                            })
-                        continue  # Skip error logging since fallback worked
-                except json.JSONDecodeError:
-                    log_error(TOOL, "JSONDecodeError", f"Failed to parse SerpApi fallback for {date_str}")
-
-            # If fallback didn't work, log the error
+            # Both SerpApi and fast-flights failed for this date pair
             err_msg = f"Error fetching {date_str}: RuntimeError"
             if err_msg not in error_messages:
                 error_messages.append(err_msg)
@@ -2691,22 +2700,82 @@ async def search_flights_by_airline(
                 return json.dumps({"error": {"message": "return_date is required when is_round_trip=True", "type": "ValueError"}})
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
             log_debug(TOOL, "dates", f"{date} to {return_date}")
-
-            flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
-                FlightData(date=return_date, from_airport=destination, to_airport=origin),
-            ]
             trip_type = "round-trip"
         else:
             log_debug(TOOL, "date", date)
-            flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
-            ]
             trip_type = "one-way"
+
+        # Generate booking URL early
+        if is_round_trip:
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{date}%20to%20{return_date}%20airlines%20{','.join(airlines_list)}"
+        else:
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20airlines%20{','.join(airlines_list)}"
+
+        # TRY SERPAPI FIRST (primary method) - SerpApi natively supports airline filtering!
+        if SERPAPI_ENABLED:
+            log_info(TOOL, "Using SerpApi with airline filter (primary method)...")
+            serpapi_result = get_flights_from_serpapi(
+                origin=origin,
+                destination=destination,
+                departure_date=date,
+                return_date=return_date if is_round_trip else None,
+                adults=adults,
+                seat_type=seat_type,
+                max_stops=max_stops,
+                airlines=airlines_list  # SerpApi natively supports airline filtering!
+            )
+
+            if serpapi_result:
+                flights_data = convert_serpapi_response(serpapi_result)
+                if flights_data:
+                    log_info(TOOL, f"SerpApi successful: {len(flights_data)} flights (already filtered by airline)")
+
+                    # SerpApi already filtered by airline, no post-filtering needed!
+                    # Process based on return_cheapest_only
+                    if return_cheapest_only and len(flights_data) > 0:
+                        cheapest_flight = min(flights_data, key=lambda f: parse_price(f.get("price")))
+                        processed_flights = [cheapest_flight]
+                        result_key = "cheapest_flight_by_airline"
+                    else:
+                        flights_to_process = flights_data[:max_results] if max_results > 0 else flights_data
+                        processed_flights = flights_to_process
+                        result_key = "flights_by_airline"
+
+                    output_data = {
+                        "search_parameters": {
+                            "origin": origin,
+                            "destination": destination,
+                            "date": date,
+                            "airlines": airlines_list,
+                            "is_round_trip": is_round_trip,
+                            "return_date": return_date if is_round_trip else None,
+                            "adults": adults,
+                            "seat_type": seat_type,
+                            "max_stops": max_stops,
+                            "return_cheapest_only": return_cheapest_only
+                        },
+                        result_key: processed_flights,
+                        "booking_url": google_flights_url,
+                        "source": "SerpApi"
+                    }
+                    return json.dumps(output_data, indent=2)
+                else:
+                    log_info(TOOL, "SerpApi returned no flights, falling back to fast-flights")
+            else:
+                log_info(TOOL, "SerpApi failed, falling back to fast-flights")
+        else:
+            log_info(TOOL, "SerpApi not enabled, using fast-flights (fallback - requires manual filtering)")
+
+        # FALLBACK: Try fast-flights (requires post-filtering since v2.2 doesn't support airline parameter)
+        log_info(TOOL, "Attempting fast-flights search...")
+        flight_data = [
+            FlightData(date=date, from_airport=origin, to_airport=destination),
+        ]
+        if is_round_trip:
+            flight_data.append(FlightData(date=return_date, from_airport=destination, to_airport=origin))
 
         passengers_info = Passengers(adults=adults)
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
         result = get_flights(
             flight_data=flight_data,
             trip=trip_type,
@@ -2715,12 +2784,6 @@ async def search_flights_by_airline(
             fetch_mode="common",
             max_stops=max_stops
         )
-
-        # Generate booking URL
-        if is_round_trip:
-            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{date}%20to%20{return_date}%20airlines%20{','.join(airlines_list)}"
-        else:
-            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20airlines%20{','.join(airlines_list)}"
 
         if result and result.flights:
             # Filter flights by airline (post-filtering since v2.2 doesn't support airline parameter)
@@ -2825,7 +2888,7 @@ async def search_flights_by_airline(
         error_msg = str(e)
         log_error(TOOL, "RuntimeError", error_msg)
 
-        # Parse airlines_list for fallback
+        # Parse airlines_list for error message
         try:
             airlines_list = json.loads(airlines)
             if not isinstance(airlines_list, list):
@@ -2833,36 +2896,22 @@ async def search_flights_by_airline(
         except json.JSONDecodeError:
             airlines_list = [airlines]
 
-        # Try SerpApi fallback with airline filter
-        fallback_result = try_serpapi_fallback(
-            tool_name=TOOL,
-            origin=origin,
-            destination=destination,
-            departure_date=date,
-            return_date=return_date if is_round_trip else None,
-            adults=adults,
-            seat_type=seat_type,
-            max_stops=max_stops,
-            airlines=airlines_list,
-            return_cheapest_only=return_cheapest_only,
-            max_results=max_results
-        )
+        # Extract Google Flights URL
+        if is_round_trip:
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{date}%20to%20{return_date}%20airlines%20{','.join(airlines_list)}"
+        else:
+            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20airlines%20{','.join(airlines_list)}"
 
-        if fallback_result:
-            return fallback_result
-
-        # Try to extract the Google Flights URL from the error
-        google_flights_url = None
         if "https://www.google.com/travel/flights" in error_msg:
             import re
             url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
             if url_match:
                 google_flights_url = url_match.group(1)
 
-        # Check if it's a "No flights found" error from fast-flights
+        # Check if it's a "No flights found" error
         if "No flights found" in error_msg:
             response_data = {
-                "message": "The scraper couldn't find flights for the specified airlines, but you can view results directly on Google Flights.",
+                "message": "Both SerpApi and fast-flights couldn't find flights for the specified airlines" if SERPAPI_ENABLED else "The scraper couldn't find flights for the specified airlines",
                 "search_parameters": {
                     "origin": origin,
                     "destination": destination,
@@ -2872,17 +2921,16 @@ async def search_flights_by_airline(
                     "return_date": return_date if is_round_trip else None,
                     "max_stops": max_stops
                 },
-                "note": f"Airline-filtered searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser.",
-                "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
+                "note": "You can view results directly on Google Flights using the URL below.",
+                "serpapi_note": "Configure SERPAPI_API_KEY to enable SerpApi (supports native airline filtering)." if not SERPAPI_ENABLED else "SerpApi was attempted first with native airline filtering.",
+                "google_flights_url": google_flights_url
             }
-            if google_flights_url:
-                response_data["google_flights_url"] = google_flights_url
             return json.dumps(response_data)
 
         return json.dumps({
             "error": {"message": error_msg, "type": "RuntimeError"},
             "google_flights_url": google_flights_url,
-            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
+            "serpapi_note": "Configure SERPAPI_API_KEY to enable SerpApi (supports native airline filtering)." if not SERPAPI_ENABLED else "SerpApi was attempted first."
         })
     except Exception as e:
         import traceback
