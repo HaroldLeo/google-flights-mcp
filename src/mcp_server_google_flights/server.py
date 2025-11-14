@@ -404,11 +404,91 @@ def get_flights_from_serpapi(
 
         # Filters
         if max_stops is not None:
-            params["stops"] = max_stops
+            # SerpApi stops: 0=Any, 1=Nonstop, 2=1 stop or fewer, 3=2 stops or fewer
+            # Our max_stops: 0=direct, 1=one stop, 2=two stops
+            # Convert: max_stops 0 -> stops 1, max_stops 1 -> stops 2, max_stops 2 -> stops 3
+            params["stops"] = max_stops + 1
 
         if airlines and len(airlines) > 0:
             # SerpApi uses comma-separated airline codes
             params["include_airlines"] = ",".join(airlines)
+
+        # Enable deep search for better results (slower but more reliable)
+        params["deep_search"] = True
+
+        # Execute search
+        search = GoogleSearch(params)
+        results = search.get_dict()
+
+        return results
+
+    except Exception as e:
+        log_error("SerpApi", type(e).__name__, str(e))
+        return None
+
+
+def get_multi_city_flights_from_serpapi(
+    segments: List[Dict],
+    adults: int = 1,
+    children: int = 0,
+    infants_in_seat: int = 0,
+    infants_on_lap: int = 0,
+    seat_type: str = "economy"
+) -> Optional[Dict]:
+    """Fetch multi-city flights from SerpApi Google Flights API.
+
+    Args:
+        segments: List of flight segments, each with 'from', 'to', 'date' fields
+        adults: Number of adults
+        children: Number of children (2-11 years)
+        infants_in_seat: Number of infants with seat (<2 years)
+        infants_on_lap: Number of lap infants (<2 years)
+        seat_type: Cabin class
+
+    Returns:
+        SerpApi response dict or None if error
+    """
+    if not SERPAPI_ENABLED:
+        return None
+
+    try:
+        # Build multi_city_json parameter
+        multi_city_data = []
+        for segment in segments:
+            multi_city_data.append({
+                "departure_id": segment["from"],
+                "arrival_id": segment["to"],
+                "date": segment["date"]
+            })
+
+        # Build search parameters
+        params = {
+            "engine": "google_flights",
+            "api_key": SERPAPI_API_KEY,
+            "type": 3,  # Multi-city
+            "multi_city_json": json.dumps(multi_city_data),
+            "currency": "USD",
+            "hl": "en",
+        }
+
+        # Travel class
+        params["travel_class"] = convert_seat_type_to_serpapi(seat_type)
+
+        # Passengers
+        if adults > 1:
+            params["adults"] = adults
+        if children > 0:
+            params["children"] = children
+        if infants_in_seat > 0:
+            params["infants_in_seat"] = infants_in_seat
+        if infants_on_lap > 0:
+            params["infants_on_lap"] = infants_on_lap
+
+        # Enable deep search for better results
+        params["deep_search"] = True
+
+        log_info("SerpApi", f"Multi-city search with {len(segments)} segments")
+        log_debug("SerpApi", "multi_city_json", params["multi_city_json"])
 
         # Execute search
         search = GoogleSearch(params)
@@ -1988,15 +2068,13 @@ async def get_multi_city_flights(
     """
     Fetches multi-city/multi-stop itineraries for complex trip planning.
 
-    ⚠️  IMPORTANT: Multi-city flight scraping is not fully supported by the underlying fast-flights
-    library. This function will generate a valid Google Flights URL with your search parameters,
-    but may not be able to parse the results. If parsing fails, you'll receive a direct link to
-    view the flights on Google Flights.
+    ✅ MULTI-CITY SUPPORT: This function now supports multi-city searches when SERPAPI_API_KEY is configured.
+    SerpApi provides reliable multi-city flight data directly from Google Flights.
 
-    💡 RECOMMENDATION FOR AI AGENTS: Instead of using this function, consider using the
-    get_one_way_flights() function multiple times (once for each leg of the journey) and
-    combining the results. This approach is more reliable and provides detailed flight
-    information for each segment, which you can then present together as a complete itinerary.
+    Fallback behavior:
+    1. Try SerpApi multi-city search (if configured) - RECOMMENDED ✅
+    2. Try fast-flights library (often fails for multi-city)
+    3. Fall back to individual segment searches
 
     Args:
         flight_segments: JSON string of flight segments. Each segment should have "date", "from", and "to" fields.
@@ -2004,9 +2082,12 @@ async def get_multi_city_flights(
         adults: Number of adult passengers (default: 1).
         seat_type: Fare class (e.g., "economy", "business", default: "economy").
         return_cheapest_only: If True, returns only the cheapest option (default: False).
+        max_results: Maximum number of results to return (default: 10).
+        compact_mode: If True, return only essential fields (default: False).
 
     Example Args:
         {"flight_segments": '[{"date": "2025-07-01", "from": "SFO", "to": "NYC"}, {"date": "2025-07-05", "from": "NYC", "to": "MIA"}]'}
+        {"flight_segments": '[{"date": "2025-12-20", "from": "LAX", "to": "TYO"}, {"date": "2025-12-27", "from": "TYO", "to": "BKK"}, {"date": "2026-01-03", "from": "BKK", "to": "LAX"}]', "adults": 2}
     """
     TOOL = "get_multi_city_flights"
 
@@ -2030,8 +2111,7 @@ async def get_multi_city_flights(
         log_info(TOOL, f"Multi-city route: {route} ({len(segments)} segments)")
         log_debug(TOOL, "constraints", f"adults={adults}, seat={seat_type}")
 
-        # Validate and build flight data
-        flights = []
+        # Validate segments
         for i, segment in enumerate(segments):
             if not all(k in segment for k in ["date", "from", "to"]):
                 log_error(TOOL, "ValueError", f"Segment {i} missing required fields")
@@ -2044,17 +2124,64 @@ async def get_multi_city_flights(
                 log_error(TOOL, "ValueError", f"Segment {i} invalid date: {segment['date']}")
                 return json.dumps({"error": {"message": f"Invalid date format in segment {i}: '{segment['date']}'. Use YYYY-MM-DD.", "type": "ValueError"}})
 
+        # Generate URL early so it's available for all code paths
+        route_str = "%20to%20".join([f"{s['from']}" for s in segments] + [segments[-1]['to']])
+        google_flights_url = f"https://www.google.com/travel/flights/search?q=multi-city%20{route_str}"
+
+        # TRY SERPAPI FIRST for multi-city (more reliable than fast-flights)
+        if SERPAPI_ENABLED:
+            log_info(TOOL, "Attempting SerpApi multi-city search...")
+            serpapi_result = get_multi_city_flights_from_serpapi(
+                segments=segments,
+                adults=adults,
+                seat_type=seat_type
+            )
+
+            if serpapi_result:
+                # Convert SerpApi response
+                flights_data = convert_serpapi_response(serpapi_result)
+                if flights_data:
+                    log_info(TOOL, f"SerpApi multi-city successful: {len(flights_data)} options")
+
+                    # Process based on return_cheapest_only
+                    if return_cheapest_only and len(flights_data) > 0:
+                        cheapest_flight = min(flights_data, key=lambda f: parse_price(f.get("price")))
+                        processed_flights = [cheapest_flight]
+                        result_key = "cheapest_multi_city_option"
+                    else:
+                        flights_to_process = flights_data[:max_results] if max_results > 0 else flights_data
+                        processed_flights = flights_to_process
+                        result_key = "multi_city_options"
+
+                    output_data = {
+                        "search_parameters": {
+                            "segments": segments,
+                            "adults": adults,
+                            "seat_type": seat_type,
+                            "return_cheapest_only": return_cheapest_only
+                        },
+                        result_key: processed_flights,
+                        "booking_url": google_flights_url,
+                        "source": "SerpApi"
+                    }
+                    return json.dumps(output_data, indent=2)
+                else:
+                    log_info(TOOL, "SerpApi returned no flights, falling back to fast-flights")
+            else:
+                log_info(TOOL, "SerpApi multi-city failed, falling back to fast-flights")
+        else:
+            log_info(TOOL, "SerpApi not enabled, using fast-flights (less reliable for multi-city)")
+
+        # FALLBACK: Try fast-flights (often fails for multi-city)
+        log_info(TOOL, "Attempting fast-flights multi-city search...")
+        flights = []
+        for segment in segments:
             flights.append(
                 FlightData(date=segment["date"], from_airport=segment["from"], to_airport=segment["to"])
             )
 
         passengers_info = Passengers(adults=adults)
 
-        # Generate URL early so it's available for all code paths
-        route_str = "%20to%20".join([f"{s['from']}" for s in segments] + [segments[-1]['to']])
-        google_flights_url = f"https://www.google.com/travel/flights/search?q=multi-city%20{route_str}"
-
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
         result = get_flights(
             flight_data=flights,
             trip="multi-city",
