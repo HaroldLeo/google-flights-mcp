@@ -1875,6 +1875,57 @@ async def search_round_trips_in_date_range(
             # else: # Optional: Log if no flights were found for a specific pair
                 # print(f"MCP Tool: No flights found for {depart_date.strftime('%Y-%m-%d')} -> {return_date.strftime('%Y-%m-%d')}", file=sys.stderr)
 
+        except RuntimeError as e:
+            date_str = f"{depart_date.strftime('%Y-%m-%d')}→{return_date.strftime('%Y-%m-%d')}"
+            error_msg = str(e)
+            log_error(TOOL, "RuntimeError", f"{date_str}: {error_msg[:100]}")
+
+            # Try SerpApi fallback for this date pair
+            fallback_result = try_serpapi_fallback(
+                tool_name=TOOL,
+                origin=origin,
+                destination=destination,
+                departure_date=depart_date.strftime('%Y-%m-%d'),
+                return_date=return_date.strftime('%Y-%m-%d'),
+                adults=adults,
+                seat_type=seat_type,
+                max_stops=max_stops,
+                return_cheapest_only=return_cheapest_only,
+                max_results=max_results if not return_cheapest_only else 10
+            )
+
+            if fallback_result:
+                # Parse the fallback result and add to results_data
+                try:
+                    fallback_data = json.loads(fallback_result)
+                    if "flights" in fallback_data or "cheapest_flight" in fallback_data:
+                        log_info(TOOL, f"SerpApi fallback successful for {date_str}")
+                        # Add the flights from fallback to results
+                        if return_cheapest_only and "cheapest_flight" in fallback_data:
+                            results_data.append({
+                                "departure_date": depart_date.strftime('%Y-%m-%d'),
+                                "return_date": return_date.strftime('%Y-%m-%d'),
+                                "cheapest_flight": fallback_data["cheapest_flight"],
+                                "booking_url": fallback_data.get("booking_url", date_pair_url),
+                                "source": "serpapi"
+                            })
+                        elif "flights" in fallback_data:
+                            results_data.append({
+                                "departure_date": depart_date.strftime('%Y-%m-%d'),
+                                "return_date": return_date.strftime('%Y-%m-%d'),
+                                "flights": fallback_data["flights"],
+                                "booking_url": fallback_data.get("booking_url", date_pair_url),
+                                "source": "serpapi"
+                            })
+                        continue  # Skip error logging since fallback worked
+                except json.JSONDecodeError:
+                    log_error(TOOL, "JSONDecodeError", f"Failed to parse SerpApi fallback for {date_str}")
+
+            # If fallback didn't work, log the error
+            err_msg = f"Error fetching {date_str}: RuntimeError"
+            if err_msg not in error_messages:
+                error_messages.append(err_msg)
+
         except Exception as e:
             date_str = f"{depart_date.strftime('%Y-%m-%d')}→{return_date.strftime('%Y-%m-%d')}"
             log_error(TOOL, type(e).__name__, f"{date_str}: {str(e)[:100]}")
@@ -2043,36 +2094,13 @@ async def get_multi_city_flights(
     except json.JSONDecodeError as e:
         log_error(TOOL, "JSONDecodeError", f"Invalid JSON in flight_segments: {str(e)}")
         return json.dumps({"error": {"message": f"Invalid JSON in flight_segments: {str(e)}", "type": "JSONDecodeError"}})
-    except RuntimeError as e:
+    except (IndexError, RuntimeError) as e:
+        # Both IndexError and RuntimeError indicate multi-city parsing failed
+        # IndexError: fast-flights can't parse multi-city results
+        # RuntimeError: scraper encountered an error (e.g., "No flights found")
         error_msg = str(e)
-        log_error(TOOL, "RuntimeError", error_msg)
-
-        # Try to extract the Google Flights URL from the error
-        # The fast-flights library often includes the URL in the error trace
-        google_flights_url = None
-        if "https://www.google.com/travel/flights" in error_msg:
-            # Extract the URL from the error message
-            import re
-            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
-            if url_match:
-                google_flights_url = url_match.group(1)
-
-        # Check if it's a "No flights found" error from fast-flights
-        if "No flights found" in error_msg:
-            response_data = {
-                "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
-                "search_parameters": {"segments": segments, "adults": adults, "seat_type": seat_type},
-                "note": "Multi-city searches may not return results via scraping. Click the URL below to view flights in your browser.",
-                "google_flights_url": google_flights_url
-            }
-            return json.dumps(response_data)
-
-        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}, "google_flights_url": google_flights_url})
-    except IndexError as e:
-        # IndexError occurs when fast-flights can't parse multi-city results
-        # This is a known limitation - multi-city is not fully supported by the library
-        error_msg = str(e)
-        log_error(TOOL, "IndexError", f"Multi-city parsing failed: {error_msg}")
+        error_type = type(e).__name__
+        log_error(TOOL, error_type, f"Multi-city parsing failed: {error_msg}")
         log_info(TOOL, "Attempting fallback: searching each segment individually")
 
         # FALLBACK: Try searching each segment as a separate one-way flight
@@ -2506,26 +2534,49 @@ async def search_flights_by_airline(
 
             log_debug(TOOL, "target_names", f"Looking for: {target_airline_names}")
 
+            # Debug: Log all unique airline names found in results
+            found_airline_names = set()
+            for flight in result.flights:
+                flight_airline = getattr(flight, 'name', '')
+                if flight_airline:
+                    found_airline_names.add(flight_airline)
+
+            if found_airline_names:
+                log_debug(TOOL, "found_airlines", f"Airlines in results: {found_airline_names}")
+            else:
+                log_info(TOOL, "WARNING: No airline names found in flight results - filtering may not work")
+
             for flight in result.flights:
                 # Get airline name from the flight object
                 flight_airline = getattr(flight, 'name', '')
                 if not flight_airline:
+                    log_debug(TOOL, "filter_skip", "Flight has no airline name, including it anyway")
+                    # If no airline name, include it (better to over-include than exclude)
+                    filtered_flights.append(flight)
                     continue
 
                 flight_airline_upper = flight_airline.upper()
 
                 # Check if the flight airline matches any of our target names
-                # Use exact match or substring match for flexibility
+                # Use substring match in both directions for flexibility
                 matches = False
                 for target in target_airline_names:
+                    # Check if target is in flight name OR flight name is in target
+                    # This handles "UNITED" matching "United Airlines" and vice versa
                     if target in flight_airline_upper or flight_airline_upper in target:
                         matches = True
+                        log_debug(TOOL, "filter_match", f"'{flight_airline}' matches target '{target}'")
                         break
 
                 if matches:
                     filtered_flights.append(flight)
 
             log_info(TOOL, f"Found {len(filtered_flights)} flights matching specified airlines")
+
+            # If no flights matched and we had flights originally, warn the user
+            if len(filtered_flights) == 0 and len(result.flights) > 0:
+                log_info(TOOL, f"WARNING: Airline filter removed all {len(result.flights)} flights. This may indicate airline name mismatch.")
+
             result.flights = filtered_flights
 
         if result and result.flights:
@@ -2569,6 +2620,32 @@ async def search_flights_by_airline(
         error_msg = str(e)
         log_error(TOOL, "RuntimeError", error_msg)
 
+        # Parse airlines_list for fallback
+        try:
+            airlines_list = json.loads(airlines)
+            if not isinstance(airlines_list, list):
+                airlines_list = [airlines_list]
+        except json.JSONDecodeError:
+            airlines_list = [airlines]
+
+        # Try SerpApi fallback with airline filter
+        fallback_result = try_serpapi_fallback(
+            tool_name=TOOL,
+            origin=origin,
+            destination=destination,
+            departure_date=date,
+            return_date=return_date if is_round_trip else None,
+            adults=adults,
+            seat_type=seat_type,
+            max_stops=max_stops,
+            airlines=airlines_list,
+            return_cheapest_only=return_cheapest_only,
+            max_results=max_results
+        )
+
+        if fallback_result:
+            return fallback_result
+
         # Try to extract the Google Flights URL from the error
         google_flights_url = None
         if "https://www.google.com/travel/flights" in error_msg:
@@ -2579,10 +2656,6 @@ async def search_flights_by_airline(
 
         # Check if it's a "No flights found" error from fast-flights
         if "No flights found" in error_msg:
-            try:
-                airlines_list = json.loads(airlines)
-            except:
-                airlines_list = []
             response_data = {
                 "message": "The scraper couldn't find flights for the specified airlines, but you can view results directly on Google Flights.",
                 "search_parameters": {
@@ -2594,13 +2667,18 @@ async def search_flights_by_airline(
                     "return_date": return_date if is_round_trip else None,
                     "max_stops": max_stops
                 },
-                "note": f"Airline-filtered searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser."
+                "note": f"Airline-filtered searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser.",
+                "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
             }
             if google_flights_url:
                 response_data["google_flights_url"] = google_flights_url
             return json.dumps(response_data)
 
-        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
+        return json.dumps({
+            "error": {"message": error_msg, "type": "RuntimeError"},
+            "google_flights_url": google_flights_url,
+            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
+        })
     except Exception as e:
         import traceback
         error_msg = str(e)
