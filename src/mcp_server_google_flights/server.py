@@ -1401,6 +1401,71 @@ async def search_one_way_flights(
         # Validate date format
         datetime.datetime.strptime(date, '%Y-%m-%d')
 
+        # Generate booking URL early
+        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}"
+
+        # TRY SERPAPI FIRST (primary method)
+        if SERPAPI_ENABLED:
+            log_info(TOOL, "Using SerpApi (primary method)...")
+            serpapi_result = get_flights_from_serpapi(
+                origin=origin,
+                destination=destination,
+                departure_date=date,
+                return_date=None,
+                adults=adults,
+                children=children,
+                infants_in_seat=infants_in_seat,
+                infants_on_lap=infants_on_lap,
+                seat_type=seat_type
+            )
+
+            if serpapi_result:
+                flights_data = convert_serpapi_response(serpapi_result)
+                if flights_data:
+                    log_info(TOOL, f"SerpApi successful: {len(flights_data)} flight(s)")
+
+                    # Process based on return_cheapest_only
+                    if return_cheapest_only and len(flights_data) > 0:
+                        cheapest_flight = min(flights_data, key=lambda f: parse_price(f.get("price")))
+                        processed_flights = [cheapest_flight]
+                        result_key = "cheapest_flight"
+                    else:
+                        flights_to_process = flights_data[:max_results] if max_results > 0 else flights_data
+                        processed_flights = flights_to_process
+                        result_key = "flights"
+
+                    output_data = {
+                        "search_parameters": {
+                            "origin": origin,
+                            "destination": destination,
+                            "date": date,
+                            "adults": adults,
+                            "children": children,
+                            "infants_in_seat": infants_in_seat,
+                            "infants_on_lap": infants_on_lap,
+                            "seat_type": seat_type,
+                            "return_cheapest_only": return_cheapest_only
+                        },
+                        result_key: processed_flights,
+                        "booking_url": google_flights_url,
+                        "source": "SerpApi"
+                    }
+                    if not return_cheapest_only and max_results > 0:
+                        output_data["result_metadata"] = {
+                            "total_found": len(flights_data),
+                            "returned": len(processed_flights),
+                            "truncated": len(flights_data) > max_results
+                        }
+                    return json.dumps(output_data, indent=2)
+                else:
+                    log_info(TOOL, "SerpApi returned no flights, falling back to fast-flights")
+            else:
+                log_info(TOOL, "SerpApi failed, falling back to fast-flights")
+        else:
+            log_info(TOOL, "SerpApi not enabled, using fast-flights (fallback)")
+
+        # FALLBACK: Try fast-flights
+        log_info(TOOL, "Attempting fast-flights search...")
         flight_data = [
             FlightData(date=date, from_airport=origin, to_airport=destination),
         ]
@@ -1411,17 +1476,13 @@ async def search_one_way_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
         result = get_flights(
             flight_data=flight_data,
             trip="one-way",
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="common"  # Use standard HTTP, avoid remote Playwright auth issues
+            fetch_mode="common"
         )
-
-        # Generate booking URL (manual construction for v2.2)
-        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}"
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} flight(s)")
@@ -1474,26 +1535,8 @@ async def search_one_way_flights(
         error_msg = str(e)
         log_error(TOOL, "RuntimeError", error_msg)
 
-        # Try SerpApi fallback
-        fallback_result = try_serpapi_fallback(
-            tool_name=TOOL,
-            origin=origin,
-            destination=destination,
-            departure_date=date,
-            return_date=None,
-            adults=adults,
-            children=children,
-            infants_in_seat=infants_in_seat,
-            infants_on_lap=infants_on_lap,
-            seat_type=seat_type,
-            return_cheapest_only=return_cheapest_only,
-            max_results=max_results
-        )
-        if fallback_result:
-            return fallback_result
-
-        # Try to extract the Google Flights URL from the error
-        google_flights_url = None
+        # Extract Google Flights URL from error
+        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}"
         if "https://www.google.com/travel/flights" in error_msg:
             import re
             url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
@@ -1503,7 +1546,7 @@ async def search_one_way_flights(
         # Check if it's a "No flights found" error from fast-flights
         if "No flights found" in error_msg:
             response_data = {
-                "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
+                "message": "Both SerpApi and fast-flights couldn't find flights" if SERPAPI_ENABLED else "The scraper couldn't find flights",
                 "search_parameters": {
                     "origin": origin,
                     "destination": destination,
@@ -1514,40 +1557,25 @@ async def search_one_way_flights(
                     "infants_on_lap": infants_on_lap,
                     "seat_type": seat_type
                 },
-                "note": "One-way searches may not return results via scraping. Click the URL below to view flights in your browser.",
-                "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
+                "note": "You can view results directly on Google Flights using the URL below.",
+                "serpapi_note": "Configure SERPAPI_API_KEY to enable SerpApi (more reliable than fast-flights)." if not SERPAPI_ENABLED else "SerpApi was attempted but also found no flights.",
+                "google_flights_url": google_flights_url
             }
-            if google_flights_url:
-                response_data["google_flights_url"] = google_flights_url
             return json.dumps(response_data)
 
-        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
+        return json.dumps({
+            "error": {"message": error_msg, "type": "RuntimeError"},
+            "google_flights_url": google_flights_url,
+            "serpapi_note": "Configure SERPAPI_API_KEY to enable SerpApi (more reliable)." if not SERPAPI_ENABLED else "SerpApi was attempted first."
+        })
     except Exception as e:
         import traceback
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
         log_debug(TOOL, "traceback", traceback.format_exc())
 
-        # Try SerpApi fallback
-        fallback_result = try_serpapi_fallback(
-            tool_name=TOOL,
-            origin=origin,
-            destination=destination,
-            departure_date=date,
-            return_date=None,
-            adults=adults,
-            children=children,
-            infants_in_seat=infants_in_seat,
-            infants_on_lap=infants_on_lap,
-            seat_type=seat_type,
-            return_cheapest_only=return_cheapest_only,
-            max_results=max_results
-        )
-        if fallback_result:
-            return fallback_result
-
-        # Try to extract URL from any exception
-        google_flights_url = None
+        # Extract URL from any exception
+        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}"
         if "https://www.google.com/travel/flights" in error_msg:
             import re
             url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
@@ -1616,6 +1644,100 @@ async def search_round_trip_flights(
         datetime.datetime.strptime(departure_date, '%Y-%m-%d')
         datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
+        # Generate booking URL early
+        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{departure_date}%20to%20{return_date}"
+
+        # TRY SERPAPI FIRST (primary method)
+        if SERPAPI_ENABLED:
+            log_info(TOOL, "Using SerpApi (primary method)...")
+            serpapi_result = get_flights_from_serpapi(
+                origin=origin,
+                destination=destination,
+                departure_date=departure_date,
+                return_date=return_date,
+                adults=adults,
+                children=children,
+                infants_in_seat=infants_in_seat,
+                infants_on_lap=infants_on_lap,
+                seat_type=seat_type,
+                max_stops=max_stops
+            )
+
+            if serpapi_result:
+                # Convert SerpApi response
+                outbound_flights = convert_serpapi_response(serpapi_result)
+                if outbound_flights:
+                    log_info(TOOL, f"SerpApi outbound successful: {len(outbound_flights)} flights")
+
+                    # For round-trip, try to get return flights
+                    complete_roundtrips = []
+                    max_outbound_to_process = min(3, len(outbound_flights))
+                    outbound_to_process = outbound_flights[:max_outbound_to_process]
+
+                    for idx, outbound in enumerate(outbound_to_process):
+                        # Get departure_token from the raw SerpApi data
+                        departure_token = None
+                        for flight in serpapi_result.get("best_flights", []) + serpapi_result.get("other_flights", []):
+                            if flight.get("price") == outbound.get("price"):
+                                departure_token = flight.get("departure_token")
+                                break
+
+                        if departure_token:
+                            log_info(TOOL, f"Fetching return flights for outbound option #{idx+1}")
+                            return_result = get_return_flights_from_serpapi(departure_token)
+
+                            if return_result:
+                                return_flights = convert_serpapi_response(return_result)
+                                if return_flights:
+                                    for return_flight in return_flights[:2]:
+                                        combined = combine_outbound_and_return_flights(outbound, return_flight)
+                                        complete_roundtrips.append(combined)
+
+                    if complete_roundtrips:
+                        log_info(TOOL, f"SerpApi successful: {len(complete_roundtrips)} complete round-trips")
+                        flights = complete_roundtrips
+                    else:
+                        log_info(TOOL, "Could not fetch return flights, using outbound only")
+                        flights = outbound_flights
+
+                    # Process based on return_cheapest_only
+                    if return_cheapest_only and len(flights) > 0:
+                        cheapest_flight = min(flights, key=lambda f: parse_price(f.get("price")))
+                        processed_flights = [cheapest_flight]
+                        result_key = "cheapest_round_trip_option"
+                    else:
+                        flights_to_process = flights[:max_results] if max_results > 0 else flights
+                        processed_flights = flights_to_process
+                        result_key = "round_trip_options"
+
+                    output_data = {
+                        "search_parameters": {
+                            "origin": origin,
+                            "destination": destination,
+                            "departure_date": departure_date,
+                            "return_date": return_date,
+                            "adults": adults,
+                            "children": children,
+                            "infants_in_seat": infants_in_seat,
+                            "infants_on_lap": infants_on_lap,
+                            "seat_type": seat_type,
+                            "max_stops": max_stops,
+                            "return_cheapest_only": return_cheapest_only
+                        },
+                        result_key: processed_flights,
+                        "booking_url": google_flights_url,
+                        "source": "SerpApi"
+                    }
+                    return json.dumps(output_data, indent=2)
+                else:
+                    log_info(TOOL, "SerpApi returned no flights, falling back to fast-flights")
+            else:
+                log_info(TOOL, "SerpApi failed, falling back to fast-flights")
+        else:
+            log_info(TOOL, "SerpApi not enabled, using fast-flights (fallback)")
+
+        # FALLBACK: Try fast-flights
+        log_info(TOOL, "Attempting fast-flights search...")
         flight_data = [
             FlightData(date=departure_date, from_airport=origin, to_airport=destination),
             FlightData(date=return_date, from_airport=destination, to_airport=origin),
@@ -1627,18 +1749,14 @@ async def search_round_trip_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
         result = get_flights(
             flight_data=flight_data,
             trip="round-trip",
             seat=seat_type,
             passengers=passengers_info,
-            fetch_mode="common",  # Use local Playwright to avoid auth issues
+            fetch_mode="common",
             max_stops=max_stops
         )
-
-        # Generate booking URL (manual construction for v2.2)
-        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{departure_date}%20to%20{return_date}"
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} round-trip option(s)")
@@ -1686,39 +1804,18 @@ async def search_round_trip_flights(
         error_msg = str(e)
         log_error(TOOL, "RuntimeError", error_msg)
 
-        # Try SerpApi fallback
-        fallback_result = try_serpapi_fallback(
-            tool_name=TOOL,
-            origin=origin,
-            destination=destination,
-            departure_date=departure_date,
-            return_date=return_date,
-            adults=adults,
-            children=children,
-            infants_in_seat=infants_in_seat,
-            infants_on_lap=infants_on_lap,
-            seat_type=seat_type,
-            max_stops=max_stops,
-            return_cheapest_only=return_cheapest_only,
-            max_results=max_results
-        )
-        if fallback_result:
-            return fallback_result
-
-        # Try to extract the Google Flights URL from the error
-        # The fast-flights library often includes the URL in the error trace
-        google_flights_url = None
+        # Extract Google Flights URL
+        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{departure_date}%20to%20{return_date}"
         if "https://www.google.com/travel/flights" in error_msg:
-            # Extract the URL from the error message
             import re
             url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
             if url_match:
                 google_flights_url = url_match.group(1)
 
-        # Check if it's a "No flights found" error from fast-flights
+        # Check if it's a "No flights found" error
         if "No flights found" in error_msg:
             response_data = {
-                "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
+                "message": "Both SerpApi and fast-flights couldn't find flights" if SERPAPI_ENABLED else "The scraper couldn't find flights",
                 "search_parameters": {
                     "origin": origin,
                     "destination": destination,
@@ -1731,55 +1828,36 @@ async def search_round_trip_flights(
                     "seat_type": seat_type,
                     "max_stops": max_stops
                 },
-                "note": f"Round-trip searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser.",
-                "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
+                "note": "You can view results directly on Google Flights using the URL below.",
+                "serpapi_note": "Configure SERPAPI_API_KEY to enable SerpApi (more reliable)." if not SERPAPI_ENABLED else "SerpApi was attempted first.",
+                "google_flights_url": google_flights_url
             }
-            if google_flights_url:
-                response_data["google_flights_url"] = google_flights_url
             return json.dumps(response_data)
 
-        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
+        return json.dumps({
+            "error": {"message": error_msg, "type": "RuntimeError"},
+            "google_flights_url": google_flights_url,
+            "serpapi_note": "Configure SERPAPI_API_KEY to enable SerpApi (more reliable)." if not SERPAPI_ENABLED else "SerpApi was attempted first."
+        })
     except Exception as e:
         import traceback
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
         log_debug(TOOL, "traceback", traceback.format_exc())
 
-        # Try SerpApi fallback
-        fallback_result = try_serpapi_fallback(
-            tool_name=TOOL,
-            origin=origin,
-            destination=destination,
-            departure_date=departure_date,
-            return_date=return_date,
-            adults=adults,
-            children=children,
-            infants_in_seat=infants_in_seat,
-            infants_on_lap=infants_on_lap,
-            seat_type=seat_type,
-            max_stops=max_stops,
-            return_cheapest_only=return_cheapest_only,
-            max_results=max_results
-        )
-        if fallback_result:
-            return fallback_result
-
-        # Try to extract URL from any exception
-        google_flights_url = None
+        # Extract URL
+        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{departure_date}%20to%20{return_date}"
         if "https://www.google.com/travel/flights" in error_msg:
             import re
             url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
             if url_match:
                 google_flights_url = url_match.group(1)
 
-        response_data = {
+        return json.dumps({
             "error": {"message": error_msg, "type": type(e).__name__},
-            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly.",
-            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
-        }
-        if google_flights_url:
-            response_data["google_flights_url"] = google_flights_url
-        return json.dumps(response_data)
+            "google_flights_url": google_flights_url,
+            "serpapi_note": "Configure SERPAPI_API_KEY to enable SerpApi (more reliable)." if not SERPAPI_ENABLED else "SerpApi was attempted first."
+        })
 
 
 @mcp.tool()
