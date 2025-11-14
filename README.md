@@ -28,7 +28,11 @@ Integrates Google Flights data directly into your AI workflow with natural langu
 - Plan complex multi-city itineraries
 - Filter by passengers, cabin class, and preferences
 
-Built on the powerful `fast-flights` library, this server provides 10 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
+Uses **SerpAPI** (Google Flights API) as the primary data source with `fast-flights` as fallback, providing 10 specialized tools, 2 resource endpoints, and 10 smart prompts for comprehensive travel planning.
+
+**Data Sources:**
+- **SerpAPI (Primary)**: Rich data including flight numbers, layovers, carbon emissions, price insights, and multi-seller booking options (250 free searches/month)
+- **fast-flights (Fallback)**: Free alternative when SerpAPI quota exhausted or key not configured
 
 ### 🟢 Amadeus MCP Server (NEW!)
 Professional-grade travel API integration with **32 comprehensive tools** covering flights, hotels, tours, transfers, and market insights.
@@ -45,8 +49,8 @@ See [AMADEUS_README.md](AMADEUS_README.md) for complete Amadeus documentation.
 
 ### 📊 Which Server Should You Use?
 
-- **Google Flights:** Quick flight searches, free, no API key required
-- **Amadeus:** Complete bookings, hotels, activities, professional features
+- **Google Flights:** Quick flight searches with rich data (flight numbers, layovers, price insights). Get free SerpAPI key for 250 searches/month at [serpapi.com/users/sign_up](https://serpapi.com/users/sign_up)
+- **Amadeus:** Complete bookings, hotels, activities, professional features (requires paid API key)
 - **Both Together:** Maximum coverage and flexibility
 
 See [COMPARISON.md](COMPARISON.md) for detailed comparison and usage scenarios.
@@ -193,7 +197,29 @@ The server uses STDIO transport and will wait for MCP client connections.
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
-#### Google Flights Server Only (Simple Setup)
+#### Google Flights Server (Recommended Setup)
+
+With SerpAPI for rich data (250 free searches/month):
+
+```json
+{
+  "mcpServers": {
+    "google-flights": {
+      "command": "uvx",
+      "args": ["mcp-server-google-flights"],
+      "env": {
+        "SERPAPI_API_KEY": "your_serpapi_key_here"
+      }
+    }
+  }
+}
+```
+
+**Get your free SerpAPI key:** [serpapi.com/users/sign_up](https://serpapi.com/users/sign_up)
+
+#### Without SerpAPI (Basic Setup)
+
+Falls back to fast-flights (limited data, no flight numbers/layovers):
 
 ```json
 {

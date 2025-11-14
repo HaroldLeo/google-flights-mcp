@@ -204,17 +204,17 @@ def format_duration(minutes):
         return f"{mins}m"
 
 def flight_to_dict(flight, compact=False, origin=None, destination=None):
-    """Converts a Flight/Flights object to a dictionary with detailed flight information.
+    """Converts a Flight object to a dictionary with detailed flight information.
 
-    Supports both fast-flights v2.2 and v3.0rc0 structures.
+    Uses fast-flights v2.2 structure.
 
     Args:
-        flight: Flight object (v2.2) or Flights object (v3.0rc0)
+        flight: Flight object (v2.2)
         compact: If True, return only essential fields (saves ~40% tokens)
-        origin: Optional origin airport code for round-trip leg detection
-        destination: Optional destination airport code for round-trip leg detection
+        origin: Optional origin airport code (unused in v2.2)
+        destination: Optional destination airport code (unused in v2.2)
 
-    v2.2 Flight structure (simpler):
+    v2.2 Flight structure:
         - is_best: bool - If this is a recommended flight
         - name: str - Airline name
         - departure: time - Departure time
@@ -222,25 +222,9 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None):
         - duration: int - Duration
         - stops: int - Number of stops
         - price: int - Price
-
-    v3.0rc0 Flights structure (detailed):
-        - type: str - Type of flight
-        - price: int - Total price
-        - airlines: list[str] - List of airline names
-        - flights: list[SingleFlight] - List of flight segments
-        - carbon: CarbonEmission - Carbon emission data
     """
     try:
-        # Detect version by checking for 'flights' attribute (v3.0rc0) vs its absence (v2.2)
-        has_segments = hasattr(flight, 'flights') and getattr(flight, 'flights', None)
-
-        if has_segments:
-            # v3.0rc0 structure - detailed segments
-            return _flight_to_dict_v3(flight, compact, origin, destination)
-        else:
-            # v2.2 structure - simpler format
-            return _flight_to_dict_v2(flight, compact)
-
+        return _flight_to_dict_v2(flight, compact)
     except Exception as e:
         # Fallback: return whatever we can extract
         log_error("flight_to_dict", type(e).__name__, f"Error converting flight: {str(e)}")
@@ -288,137 +272,11 @@ def _flight_to_dict_v2(flight, compact=False):
                 "stops": stops,
                 "flight_type": "Unknown",  # v2.2 doesn't expose this
                 "segments": [],  # v2.2 doesn't expose detailed segments
-                "note": "Detailed segment information not available in fast-flights v2.2. Upgrade to v3.x for detailed segments."
             }
     except Exception as e:
         log_error("_flight_to_dict_v2", type(e).__name__, str(e))
         return {"error": f"Failed to parse v2.2 flight: {str(e)}"}
 
-
-def _flight_to_dict_v3(flight, compact=False, origin=None, destination=None):
-    """Handle fast-flights v3.0rc0 Flights objects (detailed structure)."""
-    try:
-        # Extract basic info
-        price = getattr(flight, 'price', None)
-        airlines = getattr(flight, 'airlines', [])
-        airline_names = ', '.join(airlines) if airlines else None
-        flight_segments = getattr(flight, 'flights', [])
-        flight_type = getattr(flight, 'type', None)
-        is_round_trip = flight_type and 'round' in flight_type.lower()
-
-        # Calculate stops (number of segments - 1)
-        num_stops = len(flight_segments) - 1 if flight_segments else 0
-
-        # Get overall departure and arrival from first and last segments
-        overall_departure = None
-        overall_arrival = None
-        total_duration_minutes = 0
-
-        if flight_segments:
-            first_segment = flight_segments[0]
-            last_segment = flight_segments[-1]
-
-            overall_departure = format_datetime(getattr(first_segment, 'departure', None))
-            overall_arrival = format_datetime(getattr(last_segment, 'arrival', None))
-
-            # Sum up all segment durations
-            for segment in flight_segments:
-                duration = getattr(segment, 'duration', 0)
-                if isinstance(duration, int):
-                    total_duration_minutes += duration
-
-        total_duration = format_duration(total_duration_minutes) if total_duration_minutes > 0 else None
-
-        # Get carbon emission data
-        carbon_data = getattr(flight, 'carbon', None)
-        carbon_emission = None
-        if carbon_data:
-            emission = getattr(carbon_data, 'emission', None)
-            typical = getattr(carbon_data, 'typical_on_route', None)
-            if emission is not None:
-                carbon_emission = {
-                    "emission_grams": emission,
-                    "typical_on_route_grams": typical
-                }
-
-        if compact:
-            # Compact mode: only essential fields
-            return {
-                "price": price,
-                "airlines": airline_names,
-                "departure_time": overall_departure,
-                "arrival_time": overall_arrival,
-                "duration": total_duration,
-                "stops": num_stops,
-            }
-        else:
-            # Full mode: detailed information
-            # Build detailed segment information
-            segments = []
-
-            # For round-trips, detect the "turn-around" point to label outbound vs return
-            turn_around_index = None
-            if is_round_trip and len(flight_segments) >= 2 and destination:
-                # Find where we reach the destination and start heading back
-                for i, segment in enumerate(flight_segments):
-                    to_airport = getattr(segment, 'to_airport', None)
-                    to_code = getattr(to_airport, 'code', None) if to_airport else None
-
-                    # Check if this segment arrives at the destination
-                    if to_code and to_code.upper() == destination.upper():
-                        turn_around_index = i + 1  # Next segment starts the return
-                        break
-
-            for i, segment in enumerate(flight_segments):
-                from_airport = getattr(segment, 'from_airport', None)
-                to_airport = getattr(segment, 'to_airport', None)
-
-                # Determine leg type for round-trips
-                leg_type = None
-                if is_round_trip and turn_around_index is not None:
-                    leg_type = "outbound" if i < turn_around_index else "return"
-
-                segment_info = {
-                    "segment_number": i + 1,
-                    "from": {
-                        "airport_code": getattr(from_airport, 'code', None),
-                        "airport_name": getattr(from_airport, 'name', None),
-                    } if from_airport else None,
-                    "to": {
-                        "airport_code": getattr(to_airport, 'code', None),
-                        "airport_name": getattr(to_airport, 'name', None),
-                    } if to_airport else None,
-                    "departure": format_datetime(getattr(segment, 'departure', None)),
-                    "arrival": format_datetime(getattr(segment, 'arrival', None)),
-                    "duration": format_duration(getattr(segment, 'duration', 0)),
-                    "plane_type": getattr(segment, 'plane_type', None),
-                }
-
-                # Add leg_type for round-trips
-                if leg_type:
-                    segment_info["leg"] = leg_type
-
-                segments.append(segment_info)
-
-            return {
-                "price": price,
-                "airlines": airline_names,
-                "flight_type": flight_type,
-                "departure_time": overall_departure,
-                "arrival_time": overall_arrival,
-                "total_duration": total_duration,
-                "stops": num_stops,
-                "segments": segments,
-                "carbon_emissions": carbon_emission,
-            }
-
-    except Exception as e:
-        # Fallback: return whatever we can extract
-        log_error("flight_to_dict", type(e).__name__, f"Error converting flight: {str(e)}")
-        return {
-            "error": f"Failed to parse flight data: {str(e)}",
-            "raw_data": str(flight)
-        }
 
 def parse_price(price):
     """Extracts integer price from a price value.
