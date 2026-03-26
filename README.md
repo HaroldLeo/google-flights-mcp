@@ -1,3 +1,12 @@
+---
+title: Google Flights MCP
+emoji: ✈️
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 # Google Flights MCP Server
 
 <div align="center">
