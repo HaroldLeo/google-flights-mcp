@@ -2247,9 +2247,27 @@ def main():
     """Main entry point for the MCP server."""
     transport = os.getenv("MCP_TRANSPORT", "stdio")
     if transport == "sse":
-        mcp.settings.host = os.getenv("FASTMCP_HOST", "0.0.0.0")
-        mcp.settings.port = int(os.getenv("FASTMCP_PORT", "7860"))
-    mcp.run(transport=transport)
+        import anyio
+        import uvicorn
+
+        host = os.getenv("FASTMCP_HOST", "0.0.0.0")
+        port = int(os.getenv("FASTMCP_PORT", "7860"))
+
+        async def run():
+            app = mcp.sse_app()
+            config = uvicorn.Config(
+                app,
+                host=host,
+                port=port,
+                proxy_headers=True,
+                forwarded_allow_ips="*",
+            )
+            server = uvicorn.Server(config)
+            await server.serve()
+
+        anyio.run(run)
+    else:
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":
