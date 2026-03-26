@@ -2246,6 +2246,9 @@ async def generate_google_flights_url(
 def main():
     """Main entry point for the MCP server."""
     transport = os.getenv("MCP_TRANSPORT", "stdio")
+    if transport == "sse":
+        mcp.settings.host = os.getenv("FASTMCP_HOST", "0.0.0.0")
+        mcp.settings.port = int(os.getenv("FASTMCP_PORT", "7860"))
     mcp.run(transport=transport)
 
 
