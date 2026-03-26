@@ -2254,9 +2254,22 @@ def main():
         port = int(os.getenv("FASTMCP_PORT", "7860"))
 
         async def run():
-            app = mcp.sse_app()
+            inner_app = mcp.sse_app()
+
+            # HF Spaces reverse proxy sends the external hostname as the Host header
+            # (h125678-gflight.hf.space), but MCP SDK's SSE transport validates the
+            # Host header and rejects anything that isn't localhost/127.0.0.1 or the
+            # configured bind address. Rewrite it before MCP sees it.
+            async def host_fix_app(scope, receive, send):
+                if scope["type"] in ("http", "websocket"):
+                    scope = {**scope, "headers": [
+                        (b"host", b"localhost") if k == b"host" else (k, v)
+                        for k, v in scope.get("headers", [])
+                    ]}
+                await inner_app(scope, receive, send)
+
             config = uvicorn.Config(
-                app,
+                host_fix_app,
                 host=host,
                 port=port,
                 proxy_headers=True,
