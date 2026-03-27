@@ -2195,7 +2195,7 @@ async def generate_google_flights_url(
         if return_date:
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
-        # Build passenger info
+        # Build passenger info string for display
         passenger_parts = []
         if adults > 0:
             passenger_parts.append(f"{adults} adult{'s' if adults > 1 else ''}")
@@ -2203,30 +2203,38 @@ async def generate_google_flights_url(
             passenger_parts.append(f"{children} child{'ren' if children > 1 else ''}")
         passengers_str = " ".join(passenger_parts) if passenger_parts else "1 adult"
 
-        # Format seat class for query
-        seat_class = seat_type.replace('_', ' ')
+        # Map seat type to Google Flights cabin class code
+        cabin_map = {
+            "economy": "1",
+            "premium_economy": "2",
+            "business": "3",
+            "first": "4",
+        }
+        cabin_code = cabin_map.get(seat_type.lower(), "1")
 
-        # Build the search query with proper trip type specification
+        # Build URL using the Google Flights hash fragment format:
+        # https://www.google.com/travel/flights#flt=ORG.DST.DATE[*DST.ORG.DATE];c:USD;e:N;sd:1;t:f
+        # e:1 = economy, e:2 = premium_economy, e:3 = business, e:4 = first
+        # t:f = round-trip, t:o = one-way
         if return_date:
-            # Round trip - use "through" for better compatibility
-            query = f"flights from {origin} to {destination} on {departure_date} through {return_date} {passengers_str} {seat_class} class"
-            trip_type = "round-trip"
+            trip_segment = f"{origin}.{destination}.{departure_date}*{destination}.{origin}.{return_date}"
+            trip_flag = "f"
         else:
-            # One way - explicitly include "oneway" in query
-            query = f"flights from {origin} to {destination} on {departure_date} oneway {passengers_str} {seat_class} class"
-            trip_type = "one-way"
+            trip_segment = f"{origin}.{destination}.{departure_date}"
+            trip_flag = "o"
 
-        # URL encode the query
-        from urllib.parse import quote_plus
-        encoded_query = quote_plus(query)
+        # Passenger codes: a = adult, c = child
+        pax = f"a{adults}" + (f"c{children}" if children > 0 else "")
 
-        url = f"https://www.google.com/travel/flights/search?q={encoded_query}"
+        url = (
+            f"https://www.google.com/travel/flights#flt="
+            f"{trip_segment};c:USD;e:{cabin_code};px:{pax};sd:1;t:{trip_flag}"
+        )
 
         log_info(TOOL, f"URL generated successfully")
 
         output_data = {
             "url": url,
-            "search_query": query,
             "trip_details": {
                 "type": trip_type,
                 "origin": origin,
