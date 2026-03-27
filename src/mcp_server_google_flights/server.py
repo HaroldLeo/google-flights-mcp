@@ -24,9 +24,18 @@ except ImportError:
     print("SerpApi not available. Install with: pip install google-search-results", file=sys.stderr)
 
 from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.transport_security import TransportSecuritySettings
+    _transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+except ImportError:
+    _transport_security = None
 
 # Initialize FastMCP server
-mcp = FastMCP("google-flights-comprehensive")
+# Disable DNS rebinding protection — we run behind a trusted reverse proxy (HF Spaces)
+_mcp_kwargs = {}
+if _transport_security is not None:
+    _mcp_kwargs["transport_security"] = _transport_security
+mcp = FastMCP("google-flights-comprehensive", **_mcp_kwargs)
 
 # --- SerpApi Configuration ---
 SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
@@ -2254,22 +2263,9 @@ def main():
         port = int(os.getenv("FASTMCP_PORT", "7860"))
 
         async def run():
-            inner_app = mcp.sse_app()
-
-            # HF Spaces reverse proxy sends the external hostname as the Host header
-            # (h125678-gflight.hf.space), but MCP SDK's SSE transport validates the
-            # Host header and rejects anything that isn't localhost/127.0.0.1 or the
-            # configured bind address. Rewrite it before MCP sees it.
-            async def host_fix_app(scope, receive, send):
-                if scope["type"] in ("http", "websocket"):
-                    scope = {**scope, "headers": [
-                        (b"host", b"localhost") if k == b"host" else (k, v)
-                        for k, v in scope.get("headers", [])
-                    ]}
-                await inner_app(scope, receive, send)
-
+            app = mcp.sse_app()
             config = uvicorn.Config(
-                host_fix_app,
+                app,
                 host=host,
                 port=port,
                 proxy_headers=True,
