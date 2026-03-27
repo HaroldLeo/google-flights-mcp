@@ -9,7 +9,7 @@ from typing import Any, Optional, Dict, List
 
 # Import fast_flights from pip package (v2.2 API)
 try:
-    from fast_flights import FlightData, Passengers, get_flights
+    from fast_flights import FlightData, Passengers, get_flights, create_filter
 except ImportError as e:
     print(f"Error importing fast_flights: {e}", file=sys.stderr)
     print(f"Please install fast_flights v2.2: pip install fast-flights==2.2", file=sys.stderr)
@@ -48,6 +48,34 @@ else:
         print(f"[SerpApi] Not available - install google-search-results", file=sys.stderr)
     elif not SERPAPI_API_KEY:
         print(f"[SerpApi] API key not configured - set SERPAPI_API_KEY env var for fallback support", file=sys.stderr)
+
+# --- Google Flights URL helper ---
+def _make_google_flights_url(
+    origin: str,
+    destination: str,
+    departure_date: str,
+    return_date: Optional[str] = None,
+    adults: int = 1,
+    children: int = 0,
+    seat: str = "economy",
+) -> str:
+    """Build a working Google Flights URL using fast-flights' TFS encoder."""
+    try:
+        flight_data_list = [FlightData(date=departure_date, from_airport=origin, to_airport=destination)]
+        if return_date:
+            flight_data_list.append(FlightData(date=return_date, from_airport=destination, to_airport=origin))
+        trip = "round-trip" if return_date else "one-way"
+        tfs_b64 = create_filter(
+            flight_data=flight_data_list,
+            trip=trip,
+            seat=seat.replace("_", "-"),
+            passengers=Passengers(adults=adults, children=children),
+        ).as_b64().decode("utf-8")
+        return f"https://www.google.com/travel/flights?tfs={tfs_b64}&hl=en&tfu=EgQIABABIgA"
+    except Exception:
+        # Fallback to simple query URL if encoding fails
+        return f"https://www.google.com/travel/flights?q={origin}+to+{destination}"
+
 
 # --- Airport data cache ---
 _airports_cache = None
@@ -1349,8 +1377,7 @@ async def search_one_way_flights(
             fetch_mode="common"  # Use standard HTTP, avoid remote Playwright auth issues
         )
 
-        # Generate booking URL (manual construction for v2.2)
-        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}"
+        google_flights_url = _make_google_flights_url(origin, destination, date, seat=seat_type)
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} flight(s)")
@@ -1565,8 +1592,7 @@ async def search_round_trip_flights(
             max_stops=max_stops
         )
 
-        # Generate booking URL (manual construction for v2.2)
-        google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{departure_date}%20to%20{return_date}"
+        google_flights_url = _make_google_flights_url(origin, destination, departure_date, return_date=return_date, seat=seat_type)
 
         if result and result.flights:
             log_info(TOOL, f"Found {len(result.flights)} round-trip option(s)")
@@ -1856,8 +1882,11 @@ async def search_round_trips_in_date_range(
                 max_stops=max_stops
             )
 
-            # Generate booking URL for this date pair
-            date_pair_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{depart_date.strftime('%Y-%m-%d')}%20to%20{return_date.strftime('%Y-%m-%d')}"
+            date_pair_url = _make_google_flights_url(
+                origin, destination,
+                depart_date.strftime('%Y-%m-%d'),
+                return_date=return_date.strftime('%Y-%m-%d'),
+            )
 
             # Collect results based on mode
             if result and result.flights:
@@ -2019,11 +2048,10 @@ async def search_flights_by_airline(
             max_stops=max_stops
         )
 
-        # Generate booking URL
-        if is_round_trip:
-            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20{date}%20to%20{return_date}%20airlines%20{','.join(airlines_list)}"
-        else:
-            google_flights_url = f"https://www.google.com/travel/flights/search?q={origin}%20to%20{destination}%20on%20{date}%20airlines%20{','.join(airlines_list)}"
+        google_flights_url = _make_google_flights_url(
+            origin, destination, date,
+            return_date=return_date if is_round_trip else None,
+        )
 
         if result and result.flights:
             # Filter flights by airline (post-filtering since v2.2 doesn't support airline parameter)
@@ -2204,8 +2232,6 @@ async def generate_google_flights_url(
         passengers_str = " ".join(passenger_parts) if passenger_parts else "1 adult"
 
         # Use fast-flights' own TFS encoder to build a real Google Flights URL
-        from fast_flights import FlightData, Passengers, create_filter
-
         flight_data_list = [FlightData(date=departure_date, from_airport=origin, to_airport=destination)]
         if return_date:
             flight_data_list.append(FlightData(date=return_date, from_airport=destination, to_airport=origin))
