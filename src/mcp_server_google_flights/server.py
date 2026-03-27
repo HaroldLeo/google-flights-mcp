@@ -2203,33 +2203,24 @@ async def generate_google_flights_url(
             passenger_parts.append(f"{children} child{'ren' if children > 1 else ''}")
         passengers_str = " ".join(passenger_parts) if passenger_parts else "1 adult"
 
-        # Map seat type to Google Flights cabin class code
-        cabin_map = {
-            "economy": "1",
-            "premium_economy": "2",
-            "business": "3",
-            "first": "4",
-        }
-        cabin_code = cabin_map.get(seat_type.lower(), "1")
+        # Use fast-flights' own TFS encoder to build a real Google Flights URL
+        from fast_flights import FlightData, Passengers, create_filter
 
-        # Build URL using the Google Flights hash fragment format:
-        # https://www.google.com/travel/flights#flt=ORG.DST.DATE[*DST.ORG.DATE];c:USD;e:N;sd:1;t:f
-        # e:1 = economy, e:2 = premium_economy, e:3 = business, e:4 = first
-        # t:f = round-trip, t:o = one-way
+        flight_data_list = [FlightData(date=departure_date, from_airport=origin, to_airport=destination)]
         if return_date:
-            trip_segment = f"{origin}.{destination}.{departure_date}*{destination}.{origin}.{return_date}"
-            trip_flag = "f"
-        else:
-            trip_segment = f"{origin}.{destination}.{departure_date}"
-            trip_flag = "o"
+            flight_data_list.append(FlightData(date=return_date, from_airport=destination, to_airport=origin))
 
-        # Passenger codes: a = adult, c = child
-        pax = f"a{adults}" + (f"c{children}" if children > 0 else "")
+        trip = "round-trip" if return_date else "one-way"
+        seat = seat_type.replace("_", "-")  # e.g. premium_economy -> premium-economy
 
-        url = (
-            f"https://www.google.com/travel/flights#flt="
-            f"{trip_segment};c:USD;e:{cabin_code};px:{pax};sd:1;t:{trip_flag}"
+        tfs_filter = create_filter(
+            flight_data=flight_data_list,
+            trip=trip,
+            seat=seat,
+            passengers=Passengers(adults=adults, children=children),
         )
+        tfs_b64 = tfs_filter.as_b64().decode("utf-8")
+        url = f"https://www.google.com/travel/flights?tfs={tfs_b64}&hl=en&tfu=EgQIABABIgA"
 
         log_info(TOOL, f"URL generated successfully")
 
