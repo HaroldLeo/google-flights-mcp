@@ -5,6 +5,7 @@ import json
 import datetime
 import sys
 import os
+import re
 from typing import Any, Optional, Dict, List
 
 # Import fast_flights from pip package (v2.2 API)
@@ -162,17 +163,51 @@ AIRLINE_CODE_TO_NAME = {
     "AK": ["AirAsia"],
 }
 
-def get_airline_names_for_code(code: str) -> List[str]:
-    """Get possible airline names for a given IATA code.
+# Alliance membership limited to carriers present in AIRLINE_CODE_TO_NAME
+ALLIANCE_TO_CODES = {
+    "STAR_ALLIANCE": [
+        "UA", "AC", "LH", "LX", "OS", "SN", "TP", "TK", "SQ", "NH",
+        "OZ", "BR", "CA", "TG", "CM", "AV",
+    ],
+    "SKYTEAM": [
+        "DL", "AF", "KL", "AM", "KE", "CI", "MU", "VN", "GA", "SK", "VS",
+    ],
+    "ONEWORLD": [
+        "AA", "AS", "BA", "IB", "AY", "QR", "CX", "JL", "QF", "MH",
+    ],
+}
 
-    Args:
-        code: IATA airline code (e.g., "UA", "AA")
+
+def expand_airline_filter(airlines: List[str]) -> tuple[set, List[str]]:
+    """Expand airline codes and alliance names to the airline names fast-flights reports.
 
     Returns:
-        List of possible airline name variations
+        (set of upper-cased airline names, list of unrecognized inputs)
     """
-    code_upper = code.upper()
-    return AIRLINE_CODE_TO_NAME.get(code_upper, [code])
+    names = set()
+    unrecognized = []
+    for raw in airlines:
+        key = raw.strip().upper()
+        alliance_key = key.replace(" ", "_").replace("-", "_")
+        if alliance_key in ALLIANCE_TO_CODES:
+            codes = ALLIANCE_TO_CODES[alliance_key]
+        elif key in AIRLINE_CODE_TO_NAME:
+            codes = [key]
+        else:
+            unrecognized.append(raw)
+            continue
+        for code in codes:
+            names.update(name.upper() for name in AIRLINE_CODE_TO_NAME[code])
+    return names, unrecognized
+
+
+def flight_matches_airlines(flight_airline: str, target_names: set) -> bool:
+    """Whole-word match so e.g. "ANA" does not match "Air Canada"."""
+    flight_airline_upper = flight_airline.upper()
+    return any(
+        re.search(rf"(?<!\w){re.escape(name)}(?!\w)", flight_airline_upper)
+        for name in target_names
+    )
 
 
 def normalize_seat_type(seat_type: str) -> str:
@@ -1993,9 +2028,10 @@ async def search_flights_by_airline(
         origin: Origin airport code (e.g., "SFO").
         destination: Destination airport code (e.g., "JFK").
         date: Departure date (YYYY-MM-DD format).
-        airlines: List of airline codes or a single alliance name.
+        airlines: List of airline codes and/or alliance names.
                  - Airline codes: ["UA"], ["UA", "AA", "DL"] (2-letter IATA codes)
-                 - Alliance: ["STAR_ALLIANCE"], ["SKYTEAM"], ["ONEWORLD"]
+                 - Alliance: ["STAR_ALLIANCE"], ["SKYTEAM"], ["ONEWORLD"] (expands to member airlines)
+                 Unrecognized codes are ignored; if none are recognized an error is returned.
         is_round_trip: If True, search round-trip flights (default: False).
         return_date: Return date for round-trips (YYYY-MM-DD format).
         adults: Number of adult passengers (default: 1).
@@ -2015,6 +2051,18 @@ async def search_flights_by_airline(
 
         if not airlines_list:
             return json.dumps({"error": {"message": "airlines parameter cannot be empty", "type": "ValueError"}})
+
+        target_airline_names, unrecognized_airlines = expand_airline_filter(airlines_list)
+        if not target_airline_names:
+            return json.dumps({"error": {
+                "message": (
+                    f"Unrecognized airlines: {unrecognized_airlines}. Use 2-letter IATA codes from "
+                    f"{sorted(AIRLINE_CODE_TO_NAME)} or an alliance from {sorted(ALLIANCE_TO_CODES)}."
+                ),
+                "type": "ValueError"
+            }})
+        if unrecognized_airlines:
+            log_info(TOOL, f"Ignoring unrecognized airlines: {unrecognized_airlines}")
 
         trip_desc = f"{'round-trip' if is_round_trip else 'one-way'}"
         log_info(TOOL, f"{trip_desc.capitalize()} {origin}→{destination} on {airlines_list}")
@@ -2061,38 +2109,12 @@ async def search_flights_by_airline(
         if result and result.flights:
             # Filter flights by airline (post-filtering since v2.2 doesn't support airline parameter)
             log_info(TOOL, f"Filtering {len(result.flights)} flights by airlines: {airlines_list}")
-            filtered_flights = []
-
-            # Build a set of all possible airline name variations we're looking for
-            target_airline_names = set()
-            for airline_code_or_name in airlines_list:
-                # Add the original value (could be code or name)
-                target_airline_names.add(airline_code_or_name.upper())
-                # If it's a code, add all possible name variations
-                possible_names = get_airline_names_for_code(airline_code_or_name)
-                for name in possible_names:
-                    target_airline_names.add(name.upper())
-
             log_debug(TOOL, "target_names", f"Looking for: {target_airline_names}")
 
-            for flight in result.flights:
-                # Get airline name from the flight object
-                flight_airline = getattr(flight, 'name', '')
-                if not flight_airline:
-                    continue
-
-                flight_airline_upper = flight_airline.upper()
-
-                # Check if the flight airline matches any of our target names
-                # Use exact match or substring match for flexibility
-                matches = False
-                for target in target_airline_names:
-                    if target in flight_airline_upper or flight_airline_upper in target:
-                        matches = True
-                        break
-
-                if matches:
-                    filtered_flights.append(flight)
+            filtered_flights = [
+                flight for flight in result.flights
+                if flight_matches_airlines(getattr(flight, 'name', '') or '', target_airline_names)
+            ]
 
             log_info(TOOL, f"Found {len(filtered_flights)} flights matching specified airlines")
             result.flights = filtered_flights
