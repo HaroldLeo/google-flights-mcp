@@ -175,6 +175,11 @@ def get_airline_names_for_code(code: str) -> List[str]:
     return AIRLINE_CODE_TO_NAME.get(code_upper, [code])
 
 
+def normalize_seat_type(seat_type: str) -> str:
+    """Map tool seat_type values (e.g. "premium_economy") to fast-flights 2.2 names ("premium-economy")."""
+    return seat_type.strip().lower().replace("_", "-")
+
+
 # --- Helper functions ---
 
 def log_info(tool_name: str, message: str):
@@ -1372,7 +1377,7 @@ async def search_one_way_flights(
         result = get_flights(
             flight_data=flight_data,
             trip="one-way",
-            seat=seat_type,
+            seat=normalize_seat_type(seat_type),
             passengers=passengers_info,
             fetch_mode="common"  # Use standard HTTP, avoid remote Playwright auth issues
         )
@@ -1586,7 +1591,7 @@ async def search_round_trip_flights(
         result = get_flights(
             flight_data=flight_data,
             trip="round-trip",
-            seat=seat_type,
+            seat=normalize_seat_type(seat_type),
             passengers=passengers_info,
             fetch_mode="common",  # Use local Playwright to avoid auth issues
             max_stops=max_stops
@@ -1876,7 +1881,7 @@ async def search_round_trips_in_date_range(
             result = get_flights(
                 flight_data=flight_data,
                 trip="round-trip",
-                seat=seat_type,
+                seat=normalize_seat_type(seat_type),
                 passengers=passengers_info,
                 fetch_mode="common",
                 max_stops=max_stops
@@ -2042,7 +2047,7 @@ async def search_flights_by_airline(
         result = get_flights(
             flight_data=flight_data,
             trip=trip_type,
-            seat=seat_type,
+            seat=normalize_seat_type(seat_type),
             passengers=passengers_info,
             fetch_mode="common",
             max_stops=max_stops
