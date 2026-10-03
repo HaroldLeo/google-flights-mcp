@@ -863,7 +863,7 @@ def find_best_deal() -> str:
 1. Use `search_round_trips_in_date_range` to search all dates within your flexible window
    - Set `return_cheapest_only=true` for faster results
    - Try different stay durations (e.g., 3-7 days, 7-14 days)
-2. If you have nearby airports, use `compare_nearby_airports` to check all combinations
+2. If you have nearby airports, repeat the search for each airport combination
    - Example: NYC has JFK, LGA, EWR; SF Bay has SFO, OAK, SJC
 3. Compare results and identify the cheapest option
 4. Use `generate_google_flights_url` to create a direct booking link
@@ -887,7 +887,7 @@ def weekend_getaway() -> str:
 1. Calculate upcoming weekends using `get_travel_dates`
 2. Search both Friday-Sunday and Saturday-Monday patterns
 3. Check multiple weekend options (next 4-8 weekends)
-4. For major metro areas, compare all nearby airports using `compare_nearby_airports`
+4. For major metro areas, repeat the search for each nearby airport
 5. Find the cheapest weekend option with `search_round_trip_flights`
 
 **Weekend Patterns to Check:**
@@ -914,7 +914,7 @@ def last_minute_travel() -> str:
 1. Use `get_travel_dates` to get dates for the next 14 days
 2. Search specific dates with `search_one_way_flights` or `search_round_trip_flights`
    - Set `return_cheapest_only=true` for quick results
-3. For better deals, check if nearby airports have availability using `compare_nearby_airports`
+3. For better deals, repeat the search from nearby airports to check availability
 4. If you have flexibility, search a 3-5 day window around your target date
 5. Prioritize direct flights for time-sensitive travel
 6. Generate immediate booking links with `generate_google_flights_url`
@@ -977,14 +977,14 @@ def family_vacation() -> str:
     return """I'll help you find the perfect family-friendly flights for your vacation!
 
 **Family Travel Search Strategy:**
-1. Prioritize `search_direct_flights` to avoid complications with connections and kids
+1. Prioritize direct flights with `max_stops=0` to avoid complications with connections and kids
    - Direct flights are especially important with children to minimize travel stress
-2. Filter for reasonable departure times using `filter_by_departure_time`
+2. Review departure times in the results and pick reasonable ones
    - Avoid very early morning (before 8 AM) or late night departures
    - Morning or afternoon flights work best with kids' schedules
 3. Use `search_round_trip_flights` or `search_round_trips_in_date_range` for family dates
    - School breaks, holidays, and summer vacations
-4. Consider `compare_nearby_airports` if you have multiple options
+4. Repeat the search from nearby airports if you have multiple options
    - Sometimes a slightly farther airport has better direct flight options
 5. Account for all passengers: adults + children with proper age groups
 
@@ -1015,16 +1015,16 @@ def budget_backpacker() -> str:
 1. Use `search_round_trips_in_date_range` with wide date windows
    - Set `return_cheapest_only=true` for fastest results
    - Be flexible on dates - even a day can save significant money
-2. Use `compare_nearby_airports` to check all area airports
+2. Repeat the search for each area airport
    - Budget airlines often use secondary airports
    - Includes checking all NYC (JFK/LGA/EWR) or SF Bay (SFO/OAK/SJC) options
-3. Use `search_flights_with_max_stops` with `max_stops=2`
+3. Use `search_round_trip_flights` with `max_stops=2`
    - Multiple stops are acceptable for budget travel
    - Can save 30-50% compared to direct flights
-4. Filter by `filter_by_departure_time` for "red-eye" flights
+4. Look for "red-eye" flights in the results
    - Overnight flights are often cheaper
    - Saves a night of accommodation
-5. Consider `compare_one_way_vs_roundtrip`
+5. Compare two `search_one_way_flights` searches against `search_round_trip_flights`
    - Mix and match airlines for best prices
 
 **Budget Travel Priorities:**
@@ -1064,10 +1064,10 @@ def loyalty_program_optimizer() -> str:
    - Oneworld: `["ONEWORLD"]` - American, British Airways, Qantas, etc.
    - Specific airlines: `["UA", "AA", "DL"]` for United, American, Delta
 2. Compare alliance options using multiple searches if you have status with multiple programs
-3. Use `search_direct_flights` on your airline for maximum miles/points
+3. Use `search_flights_by_airline` with `max_stops=0` for maximum miles/points
    - Direct flights on your airline = full mileage credit
 4. Check `search_round_trip_flights` for award availability patterns
-5. Consider `compare_nearby_airports` to find airline hub airports
+5. Repeat the search from nearby airline hub airports
    - Example: United hub at EWR/IAD/ORD/DEN/SFO
 
 **Loyalty Program Priorities:**
@@ -1093,9 +1093,7 @@ def loyalty_program_optimizer() -> str:
 - Whether you're trying to earn status or maintain it
 - Seat class preference (or using points/miles)
 
-**Result:** I'll find flights on your preferred airline/alliance, show you the best mileage-earning options, and provide strategies to maximize your loyalty benefits.
-
-NOTE: Now with fast-flights 2.2, airline filtering is native and more reliable. All searches show price context (low/typical/high) to help you decide if it's a good time to book!"""
+**Result:** I'll find flights on your preferred airline/alliance, show you the best mileage-earning options, and provide strategies to maximize your loyalty benefits."""
 
 
 @mcp.prompt()
@@ -1108,8 +1106,8 @@ def holiday_peak_travel() -> str:
 2. Use `search_round_trips_in_date_range` to find the best days around holidays
    - Flying on the holiday itself is often cheaper
    - Check +/- 3 days around peak dates
-3. Use `compare_nearby_airports` - secondary airports may have better availability
-4. Use `search_direct_flights` if available (connections get more risky during holidays)
+3. Repeat the search from nearby airports - secondary airports may have better availability
+4. Use `max_stops=0` for direct flights if available (connections get more risky during holidays)
 5. Book EARLY - peak travel sells out fast
 
 **Peak Holiday Periods:**
@@ -1147,12 +1145,12 @@ def long_haul_international() -> str:
 1. Use `search_round_trip_flights` or `search_round_trips_in_date_range` for your dates
 2. Consider `search_flights_by_airline` for your preferred airlines
    - International carriers often have better long-haul comfort
-3. Use `search_direct_flights` for routes over 6+ hours
+3. Use `max_stops=0` for direct flights on routes over 6+ hours
    - Direct is worth the premium for very long flights
    - Reduces jet lag and travel time
 4. Compare `seat_type="business"` or `seat_type="premium_economy"` for flights over 8 hours
    - Lie-flat business class for ultra long-haul (10+ hours)
-5. Consider `compare_one_way_vs_roundtrip` for open-jaw itineraries
+5. Consider two `search_one_way_flights` searches for open-jaw itineraries
    - Fly into one city, out from another
 
 **Long-Haul Flight Priorities:**
@@ -1192,10 +1190,10 @@ def stopover_explorer() -> str:
     return """I'll help you find flights with stopovers that turn layovers into adventures!
 
 **Stopover Explorer Search Strategy:**
-1. Use `get_multi_city_flights` to explicitly plan multi-city routes
+1. Use one `search_one_way_flights` search per leg to plan multi-city routes
    - Visit 2-3 cities in one trip
    - Example: NYC → Iceland (3 days) → London → NYC
-2. Use `search_flights_with_max_stops` with `max_stops=1` or `max_stops=2`
+2. Use `search_round_trip_flights` with `max_stops=1` or `max_stops=2`
    - Review layover cities in the results
 3. Look for airlines offering free stopover programs:
    - **Iceland air:** Free Iceland stopover (KEF)
@@ -1203,7 +1201,7 @@ def stopover_explorer() -> str:
    - **Turkish Airlines:** Free Istanbul stopover (IST)
    - **Emirates:** Dubai stopover program (DXB)
    - **Singapore Airlines:** Singapore stopover (SIN)
-4. Use `compare_nearby_airports` to find the best gateway for your desired stopover
+4. Repeat the search from nearby airports to find the best gateway for your desired stopover
 5. Manually search specific routing if you know you want a stopover
 
 **Popular Stopover Cities:**
@@ -1265,8 +1263,6 @@ def reliable_search_strategy() -> str:
 
 ## 📊 New Features (v2.2)
 
-- **Price Context**: Every search now shows if prices are "low", "typical", or "high"
-- **Native Airline Filtering**: Built into fast-flights 2.2, more reliable than before
 - **Better Error Messages**: More helpful guidance when searches fail
 
 **What's your issue? Let me help you find the best solution!**"""
