@@ -160,27 +160,39 @@ def format_duration(minutes):
     else:
         return f"{mins}m"
 
-def flight_to_dict(flight, compact=False, origin=None, destination=None):
+def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=None):
     """Convert a fast-flights v3 Flights object to a response dict.
 
-    Round-trip results include outbound + return segments in ``flight.flights``.
+    Notes on Google Flights / fast-flights v3:
+    - ``flight.type`` is usually a marketing carrier code (e.g. ``UA``), not
+      "round-trip". ``multi`` means more than one carrier.
+    - For ``trip="round-trip"`` searches, the first results page still lists
+      *outbound* itineraries (with connection segments). ``price`` is the
+      round-trip total for the cheapest paired return, but return legs are not
+      included in ``flight.flights``. Use SerpApi fallback for return options.
     """
     try:
         price = getattr(flight, "price", None)
         airlines = getattr(flight, "airlines", []) or []
         airline_names = ", ".join(airlines) if airlines else None
         flight_segments = getattr(flight, "flights", []) or []
-        flight_type = getattr(flight, "type", None)
-        is_round_trip = bool(flight_type and "round" in str(flight_type).lower())
+        raw_type = getattr(flight, "type", None)
 
-        # Stops within each direction are segment_count - 1; for round-trips
-        # prefer counting stops on the outbound leg when we can detect it.
+        if raw_type and str(raw_type).lower() == "multi":
+            flight_type = "multi-carrier"
+        elif trip == "round-trip":
+            flight_type = "round-trip (outbound selection)"
+        elif trip == "one-way":
+            flight_type = "one-way"
+        else:
+            flight_type = str(raw_type) if raw_type else None
+
+        # Connection stops on the returned itinerary (outbound page for RT).
         num_stops = max(len(flight_segments) - 1, 0) if flight_segments else 0
 
         overall_departure = None
         overall_arrival = None
         total_duration_minutes = 0
-        turn_around_index = None
 
         if flight_segments:
             overall_departure = format_datetime(getattr(flight_segments[0], "departure", None))
@@ -189,16 +201,6 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None):
                 duration = getattr(segment, "duration", 0)
                 if isinstance(duration, int):
                     total_duration_minutes += duration
-
-            if is_round_trip and destination:
-                for i, segment in enumerate(flight_segments):
-                    to_airport = getattr(segment, "to_airport", None)
-                    to_code = getattr(to_airport, "code", None) if to_airport else None
-                    if to_code and to_code.upper() == destination.upper():
-                        turn_around_index = i + 1
-                        outbound_segs = turn_around_index
-                        num_stops = max(outbound_segs - 1, 0)
-                        break
 
         total_duration = (
             format_duration(total_duration_minutes) if total_duration_minutes > 0 else None
@@ -230,10 +232,6 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None):
         for i, segment in enumerate(flight_segments):
             from_airport = getattr(segment, "from_airport", None)
             to_airport = getattr(segment, "to_airport", None)
-            leg_type = None
-            if is_round_trip and turn_around_index is not None:
-                leg_type = "outbound" if i < turn_around_index else "return"
-
             segment_info = {
                 "segment_number": i + 1,
                 "from": {
@@ -253,11 +251,11 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None):
                 "duration": format_duration(getattr(segment, "duration", 0)),
                 "plane_type": getattr(segment, "plane_type", None),
             }
-            if leg_type:
-                segment_info["leg"] = leg_type
+            if trip == "round-trip":
+                segment_info["leg"] = "outbound"
             segments.append(segment_info)
 
-        return {
+        payload = {
             "price": price,
             "airlines": airline_names,
             "flight_type": flight_type,
@@ -268,6 +266,12 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None):
             "segments": segments,
             "carbon_emissions": carbon_emission,
         }
+        if trip == "round-trip":
+            payload["price_note"] = (
+                "Price is the round-trip total for this outbound option; "
+                "return flight segments are not included in fast-flights results."
+            )
+        return payload
     except Exception as e:
         log_error("flight_to_dict", type(e).__name__, f"Error converting flight: {str(e)}")
         return {
@@ -1228,9 +1232,10 @@ def reliable_search_strategy() -> str:
 
 ## 📊 fast-flights v3
 
-- **Round-trip packages**: Outbound + return segments in one result
+- **Better scraping**: JS parser + full result set (`tfu`)
 - **Native airline filtering**: IATA codes / alliances on the query
-- **Segments + carbon**: Detailed legs and emissions when available
+- **Segments + carbon**: Connection legs and emissions when available
+- **Round-trip note**: Prices are RT totals; return legs still need SerpApi fallback
 
 **What's your issue? Let me help you find the best solution!**"""
 
@@ -1345,10 +1350,15 @@ async def search_one_way_flights(
             # Process flights based on the new parameter
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
+                processed_flights = [
+                    flight_to_dict(cheapest_flight, compact=compact_mode, trip="one-way")
+                ]
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
+                processed_flights = [
+                    flight_to_dict(f, compact=compact_mode, trip="one-way")
+                    for f in flights_to_process
+                ]
             result_key = "flights"
 
             output_data = {
@@ -1558,13 +1568,29 @@ async def search_round_trip_flights(
             # Process flights based on the new parameter
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode, origin=origin, destination=destination)]
+                processed_flights = [
+                    flight_to_dict(
+                        cheapest_flight,
+                        compact=compact_mode,
+                        origin=origin,
+                        destination=destination,
+                        trip="round-trip",
+                    )
+                ]
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
-                processed_flights = [flight_to_dict(f, compact=compact_mode, origin=origin, destination=destination) for f in flights_to_process]
+                processed_flights = [
+                    flight_to_dict(
+                        f,
+                        compact=compact_mode,
+                        origin=origin,
+                        destination=destination,
+                        trip="round-trip",
+                    )
+                    for f in flights_to_process
+                ]
             result_key = "flights"
 
-            # v3 returns complete round-trip packages (outbound + return segments).
             output_data = {
                 "search_parameters": {
                     "origin": origin,
@@ -1582,8 +1608,9 @@ async def search_round_trip_flights(
                 result_key: processed_flights,
                 "booking_url": google_flights_url,
                 "round_trip_note": (
-                    "Complete round-trip packages with outbound and return segments "
-                    "(pre-combined by Google; not mix-and-match)."
+                    "Results are outbound options with round-trip total prices. "
+                    "Return legs are not included by fast-flights (same as Google's "
+                    "first results page). Set SERPAPI_API_KEY for return-flight packages."
                 ),
             }
             return json.dumps(output_data, indent=2)
@@ -1865,14 +1892,20 @@ async def search_round_trips_in_date_range(
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
                         "cheapest_flight": flight_to_dict(
-                            cheapest_flight_for_pair, origin=origin, destination=destination
+                            cheapest_flight_for_pair,
+                            origin=origin,
+                            destination=destination,
+                            trip="round-trip",
                         ),
                         "booking_url": date_pair_url
                     })
                 else:
                     # Store all flights for this pair
                     flights_list = [
-                        flight_to_dict(f, origin=origin, destination=destination) for f in result
+                        flight_to_dict(
+                            f, origin=origin, destination=destination, trip="round-trip"
+                        )
+                        for f in result
                     ]
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
@@ -2050,6 +2083,7 @@ async def search_flights_by_airline(
                         compact=compact_mode,
                         origin=origin,
                         destination=destination,
+                        trip=trip_type,
                     )
                 ]
                 result_key = "flights"
@@ -2057,7 +2091,11 @@ async def search_flights_by_airline(
                 flights_to_process = result[:max_results] if max_results > 0 else result
                 processed_flights = [
                     flight_to_dict(
-                        f, compact=compact_mode, origin=origin, destination=destination
+                        f,
+                        compact=compact_mode,
+                        origin=origin,
+                        destination=destination,
+                        trip=trip_type,
                     )
                     for f in flights_to_process
                 ]

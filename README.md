@@ -26,7 +26,7 @@ pinned: false
 Integrates Google Flights data directly into your AI workflow with natural language searches, intelligent price comparisons, and automated travel planning.
 
 **Data Sources:**
-- **fast-flights v3 (Primary):** Free, no API key required — round-trip packages with outbound + return segments, native airline filters
+- **fast-flights v3 (Primary):** Free, no API key required — JS parser, connection segments, native airline filters; round-trip searches return outbound options with RT total prices
 - **SerpAPI (Fallback):** Richer data including flight numbers, layovers, carbon emissions, and multi-seller booking options — used when `SERPAPI_API_KEY` is set (250 free searches/month)
 
 ---
