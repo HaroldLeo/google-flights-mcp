@@ -28,10 +28,13 @@ classifiers = [
 dependencies = [
     "mcp>=1.13,<2",
     # Pin past 3.1.0 so we include the tfu/result-group fixes not yet released on PyPI.
-    "fast-flights @ https://github.com/AWeirdDev/flights/archive/7c105db4ed5f73fbadbf6b0e9f6bdfd71f352d97.zip",
+    "fast-flights @ git+https://github.com/AWeirdDev/flights.git@7c105db4ed5f73fbadbf6b0e9f6bdfd71f352d97",
     "google-search-results>=2.4.2",
     "uvicorn>=0.31.1",
 ]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
 
 [project.urls]
 Homepage = "https://github.com/HaroldLeo/google-flights-mcp"
@@ -41,5 +44,13 @@ Issues = "https://github.com/HaroldLeo/google-flights-mcp/issues"
 [project.scripts]
 mcp-server-google-flights = "mcp_server_google_flights:main"
 
+# Hatch rejects VCS and URL requirements unless this is set.
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_server_google_flights"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -7,7 +7,6 @@ import sys
 import os
 from typing import Any, Optional, Dict, List
 
-# Import fast_flights v3 API (JS parser + round-trip packages)
 try:
     from fast_flights import (
         FlightQuery,
@@ -58,7 +57,6 @@ else:
     elif not SERPAPI_API_KEY:
         print(f"[SerpApi] API key not configured - set SERPAPI_API_KEY env var for fallback support", file=sys.stderr)
 
-# --- Helpers for fast-flights v3 ---
 def normalize_seat_type(seat_type: str) -> str:
     """Map tool seat args (premium_economy) to fast-flights seat keys (premium-economy)."""
     return (seat_type or "economy").replace("_", "-").lower()
