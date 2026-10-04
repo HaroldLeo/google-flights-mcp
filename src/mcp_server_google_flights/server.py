@@ -1193,8 +1193,8 @@ def stopover_explorer() -> str:
 1. Use one `search_one_way_flights` search per leg to plan multi-city routes
    - Visit 2-3 cities in one trip
    - Example: NYC → Iceland (3 days) → London → NYC
-2. Use `search_round_trip_flights` with `max_stops=1` or `max_stops=2`
-   - Review layover cities in the results
+2. Use `search_one_way_flights` through candidate stopover airports
+   - Search origin → stopover and stopover → destination as separate legs
 3. Look for airlines offering free stopover programs:
    - **Iceland air:** Free Iceland stopover (KEF)
    - **TAP Portugal:** Free Lisbon/Porto stopover (LIS/OPO)
