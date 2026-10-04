@@ -128,6 +128,14 @@ def test_raw_code_does_not_substring_match_other_airlines():
     assert server.flight_matches_airlines("Alaska", targets)
 
 
+def test_carrier_names_match_exactly_per_carrier():
+    united, _ = server.expand_airline_filter(["UA"])
+    assert not server.flight_matches_airlines("United Nigeria Airlines", united)
+    assert server.flight_matches_airlines("United, Lufthansa", united)
+    ana, _ = server.expand_airline_filter(["NH"])
+    assert not server.flight_matches_airlines("Air Canada", ana)
+
+
 def test_alliance_members_all_have_name_mappings():
     for codes in server.ALLIANCE_TO_CODES.values():
         assert set(codes) <= set(server.AIRLINE_CODE_TO_NAME)

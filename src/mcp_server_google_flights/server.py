@@ -250,12 +250,9 @@ def expand_airline_filter(airlines: List[str]) -> tuple[set, List[str]]:
 
 
 def flight_matches_airlines(flight_airline: str, target_names: set) -> bool:
-    """Whole-word match so e.g. "ANA" does not match "Air Canada"."""
-    flight_airline_upper = flight_airline.upper()
-    return any(
-        re.search(rf"(?<!\w){re.escape(name)}(?!\w)", flight_airline_upper)
-        for name in target_names
-    )
+    """Exact-match each carrier; Google Flights lists multi-carrier itineraries as "United, Lufthansa"."""
+    carriers = {carrier.strip().upper() for carrier in flight_airline.split(",")}
+    return not carriers.isdisjoint(target_names)
 
 
 def normalize_seat_type(seat_type: str) -> str:
