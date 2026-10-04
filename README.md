@@ -26,7 +26,7 @@ pinned: false
 Integrates Google Flights data directly into your AI workflow with natural language searches, intelligent price comparisons, and automated travel planning.
 
 **Data Sources:**
-- **fast-flights (Primary):** Free, no API key required
+- **fast-flights v3 (Primary):** Free, no API key required — round-trip packages with outbound + return segments, native airline filters
 - **SerpAPI (Fallback):** Richer data including flight numbers, layovers, carbon emissions, and multi-seller booking options — used when `SERPAPI_API_KEY` is set (250 free searches/month)
 
 ---
@@ -44,8 +44,8 @@ Integrates Google Flights data directly into your AI workflow with natural langu
 
 ### Resources
 
-- `airports://all` — Browse available airports
-- `airports://{code}` — Get info for a specific airport (e.g. `airports://LAX`)
+- `airports://all` — Notes on IATA usage (v3 no longer ships an airport enum)
+- `airports://{code}` — Validate a 3-letter IATA code (e.g. `airports://LAX`)
 
 ### Prompts
 
@@ -152,7 +152,7 @@ The `Dockerfile` and transport switching are already configured — set `MCP_TRA
 
 **No flights found:** Try a different date or route. Google Flights rate-limits scraping — SerpAPI fallback is more reliable.
 
-**401 error:** Update to the latest version. Older versions used a remote Playwright service that now requires auth.
+**Scraping errors:** Retry later, or set `SERPAPI_API_KEY` for automatic fallback.
 
 **Slow searches:** `search_round_trips_in_date_range` is limited to 30 date combinations to avoid rate limiting. Narrow your date range or use `min_stay_days`/`max_stay_days`.
 

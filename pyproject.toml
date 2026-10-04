@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-server-google-flights"
-version = "0.1.0"
+version = "0.2.0"
 description = "A powerful MCP server for intelligent flight search using Google Flights"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,7 +27,8 @@ classifiers = [
 
 dependencies = [
     "mcp>=1.13,<2",
-    "fast-flights==2.2",
+    # Pin past 3.1.0 so we include the tfu/result-group fixes not yet released on PyPI.
+    "fast-flights @ https://github.com/AWeirdDev/flights/archive/7c105db4ed5f73fbadbf6b0e9f6bdfd71f352d97.zip",
     "google-search-results>=2.4.2",
     "uvicorn>=0.31.1",
 ]

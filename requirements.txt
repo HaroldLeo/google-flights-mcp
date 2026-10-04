@@ -1,4 +1,4 @@
 mcp>=1.13,<2
-fast-flights==2.2
+fast-flights @ https://github.com/AWeirdDev/flights/archive/7c105db4ed5f73fbadbf6b0e9f6bdfd71f352d97.zip
 google-search-results>=2.4.2
 uvicorn>=0.31.1

@@ -7,12 +7,21 @@ import sys
 import os
 from typing import Any, Optional, Dict, List
 
-# Import fast_flights from pip package (v2.2 API)
+# Import fast_flights v3 API (JS parser + round-trip packages)
 try:
-    from fast_flights import FlightData, Passengers, get_flights, create_filter
+    from fast_flights import (
+        FlightQuery,
+        Passengers,
+        get_flights,
+        create_query,
+        FlightsNotFound,
+    )
 except ImportError as e:
     print(f"Error importing fast_flights: {e}", file=sys.stderr)
-    print(f"Please install fast_flights v2.2: pip install fast-flights==2.2", file=sys.stderr)
+    print(
+        "Please install fast-flights v3+: pip install -r requirements.txt",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
 # Import SerpApi for fallback (optional)
@@ -49,7 +58,12 @@ else:
     elif not SERPAPI_API_KEY:
         print(f"[SerpApi] API key not configured - set SERPAPI_API_KEY env var for fallback support", file=sys.stderr)
 
-# --- Google Flights URL helper ---
+# --- Helpers for fast-flights v3 ---
+def normalize_seat_type(seat_type: str) -> str:
+    """Map tool seat args (premium_economy) to fast-flights seat keys (premium-economy)."""
+    return (seat_type or "economy").replace("_", "-").lower()
+
+
 def _make_google_flights_url(
     origin: str,
     destination: str,
@@ -61,118 +75,24 @@ def _make_google_flights_url(
 ) -> str:
     """Build a working Google Flights URL using fast-flights' TFS encoder."""
     try:
-        flight_data_list = [FlightData(date=departure_date, from_airport=origin, to_airport=destination)]
+        flights = [
+            FlightQuery(date=departure_date, from_airport=origin, to_airport=destination)
+        ]
         if return_date:
-            flight_data_list.append(FlightData(date=return_date, from_airport=destination, to_airport=origin))
+            flights.append(
+                FlightQuery(date=return_date, from_airport=destination, to_airport=origin)
+            )
         trip = "round-trip" if return_date else "one-way"
-        tfs_b64 = create_filter(
-            flight_data=flight_data_list,
+        query = create_query(
+            flights=flights,
             trip=trip,
-            seat=seat.replace("_", "-"),
+            seat=normalize_seat_type(seat),
             passengers=Passengers(adults=adults, children=children),
-        ).as_b64().decode("utf-8")
-        return f"https://www.google.com/travel/flights?tfs={tfs_b64}&hl=en&tfu=EgQIABABIgA"
+        )
+        return query.url()
     except Exception:
         # Fallback to simple query URL if encoding fails
         return f"https://www.google.com/travel/flights?q={origin}+to+{destination}"
-
-
-# --- Airport data cache ---
-_airports_cache = None
-
-def get_all_airports():
-    """Get all available airports from fast_flights."""
-    global _airports_cache
-    if _airports_cache is None:
-        try:
-            from fast_flights.search import Airports
-            _airports_cache = list(Airports)
-        except Exception as e:
-            print(f"Warning: Could not load airports: {e}", file=sys.stderr)
-            _airports_cache = []
-    return _airports_cache
-
-
-# --- Airline Code Mappings ---
-# IATA airline codes to full names used by fast-flights
-AIRLINE_CODE_TO_NAME = {
-    # Major US carriers
-    "AA": ["American", "American Airlines"],
-    "DL": ["Delta", "Delta Air Lines"],
-    "UA": ["United", "United Airlines"],
-    "WN": ["Southwest", "Southwest Airlines"],
-    "AS": ["Alaska", "Alaska Airlines"],
-    "B6": ["JetBlue", "JetBlue Airways"],
-    "F9": ["Frontier", "Frontier Airlines"],
-    "NK": ["Spirit", "Spirit Airlines"],
-    "G4": ["Allegiant", "Allegiant Air"],
-    "SY": ["Sun Country", "Sun Country Airlines"],
-
-    # Major International carriers
-    "AC": ["Air Canada"],
-    "AM": ["Aeroméxico", "Aeromexico"],
-    "BA": ["British Airways"],
-    "AF": ["Air France"],
-    "KL": ["KLM", "KLM Royal Dutch Airlines"],
-    "LH": ["Lufthansa"],
-    "EK": ["Emirates"],
-    "QR": ["Qatar Airways"],
-    "SQ": ["Singapore Airlines"],
-    "CX": ["Cathay Pacific"],
-    "NH": ["ANA", "All Nippon Airways"],
-    "JL": ["JAL", "Japan Airlines"],
-    "QF": ["Qantas"],
-    "EY": ["Etihad", "Etihad Airways"],
-    "TK": ["Turkish Airlines"],
-    "VS": ["Virgin Atlantic"],
-    "AZ": ["ITA Airways", "Alitalia"],
-    "IB": ["Iberia"],
-    "LX": ["Swiss", "Swiss International Air Lines"],
-    "OS": ["Austrian", "Austrian Airlines"],
-    "SN": ["Brussels Airlines"],
-    "SK": ["SAS", "Scandinavian Airlines"],
-    "AY": ["Finnair"],
-    "TP": ["TAP", "TAP Air Portugal"],
-    "EI": ["Aer Lingus"],
-    "WS": ["WestJet"],
-    "CM": ["Copa Airlines"],
-    "AV": ["Avianca"],
-    "LA": ["LATAM", "LATAM Airlines"],
-
-    # Asian carriers
-    "KE": ["Korean Air"],
-    "OZ": ["Asiana"],
-    "BR": ["EVA Air"],
-    "CI": ["China Airlines"],
-    "CA": ["Air China"],
-    "CZ": ["China Southern"],
-    "MU": ["China Eastern"],
-    "TG": ["Thai Airways"],
-    "VN": ["Vietnam Airlines"],
-    "MH": ["Malaysia Airlines"],
-    "GA": ["Garuda Indonesia"],
-    "PR": ["Philippine Airlines"],
-
-    # Budget carriers
-    "FR": ["Ryanair"],
-    "U2": ["easyJet"],
-    "VY": ["Vueling"],
-    "W6": ["Wizz Air"],
-    "TR": ["Scoot"],
-    "AK": ["AirAsia"],
-}
-
-def get_airline_names_for_code(code: str) -> List[str]:
-    """Get possible airline names for a given IATA code.
-
-    Args:
-        code: IATA airline code (e.g., "UA", "AA")
-
-    Returns:
-        List of possible airline name variations
-    """
-    code_upper = code.upper()
-    return AIRLINE_CODE_TO_NAME.get(code_upper, [code])
 
 
 # --- Helper functions ---
@@ -241,78 +161,119 @@ def format_duration(minutes):
         return f"{mins}m"
 
 def flight_to_dict(flight, compact=False, origin=None, destination=None):
-    """Converts a Flight object to a dictionary with detailed flight information.
+    """Convert a fast-flights v3 Flights object to a response dict.
 
-    Uses fast-flights v2.2 structure.
-
-    Args:
-        flight: Flight object (v2.2)
-        compact: If True, return only essential fields (saves ~40% tokens)
-        origin: Optional origin airport code (unused in v2.2)
-        destination: Optional destination airport code (unused in v2.2)
-
-    v2.2 Flight structure:
-        - is_best: bool - If this is a recommended flight
-        - name: str - Airline name
-        - departure: time - Departure time
-        - arrival: time - Arrival time
-        - duration: int - Duration
-        - stops: int - Number of stops
-        - price: int - Price
+    Round-trip results include outbound + return segments in ``flight.flights``.
     """
     try:
-        return _flight_to_dict_v2(flight, compact)
-    except Exception as e:
-        # Fallback: return whatever we can extract
-        log_error("flight_to_dict", type(e).__name__, f"Error converting flight: {str(e)}")
-        return {
-            "error": f"Failed to parse flight data: {str(e)}",
-            "raw_data": str(flight)
-        }
+        price = getattr(flight, "price", None)
+        airlines = getattr(flight, "airlines", []) or []
+        airline_names = ", ".join(airlines) if airlines else None
+        flight_segments = getattr(flight, "flights", []) or []
+        flight_type = getattr(flight, "type", None)
+        is_round_trip = bool(flight_type and "round" in str(flight_type).lower())
 
+        # Stops within each direction are segment_count - 1; for round-trips
+        # prefer counting stops on the outbound leg when we can detect it.
+        num_stops = max(len(flight_segments) - 1, 0) if flight_segments else 0
 
-def _flight_to_dict_v2(flight, compact=False):
-    """Handle fast-flights v2.2 Flight objects (simpler structure)."""
-    try:
-        price = getattr(flight, 'price', None)
-        airline_name = getattr(flight, 'name', None)
-        is_best = getattr(flight, 'is_best', False)
-        departure = getattr(flight, 'departure', None)
-        arrival = getattr(flight, 'arrival', None)
-        duration = getattr(flight, 'duration', None)
-        stops = getattr(flight, 'stops', None)
+        overall_departure = None
+        overall_arrival = None
+        total_duration_minutes = 0
+        turn_around_index = None
 
-        # Format duration if it's a number
-        if isinstance(duration, (int, float)):
-            formatted_duration = format_duration(int(duration))
-        else:
-            formatted_duration = str(duration) if duration else None
+        if flight_segments:
+            overall_departure = format_datetime(getattr(flight_segments[0], "departure", None))
+            overall_arrival = format_datetime(getattr(flight_segments[-1], "arrival", None))
+            for segment in flight_segments:
+                duration = getattr(segment, "duration", 0)
+                if isinstance(duration, int):
+                    total_duration_minutes += duration
+
+            if is_round_trip and destination:
+                for i, segment in enumerate(flight_segments):
+                    to_airport = getattr(segment, "to_airport", None)
+                    to_code = getattr(to_airport, "code", None) if to_airport else None
+                    if to_code and to_code.upper() == destination.upper():
+                        turn_around_index = i + 1
+                        outbound_segs = turn_around_index
+                        num_stops = max(outbound_segs - 1, 0)
+                        break
+
+        total_duration = (
+            format_duration(total_duration_minutes) if total_duration_minutes > 0 else None
+        )
+
+        carbon_data = getattr(flight, "carbon", None)
+        carbon_emission = None
+        if carbon_data:
+            emission = getattr(carbon_data, "emission", None)
+            typical = getattr(carbon_data, "typical_on_route", None)
+            if emission is not None:
+                carbon_emission = {
+                    "emission_grams": emission,
+                    "typical_on_route_grams": typical,
+                }
 
         if compact:
             return {
                 "price": price,
-                "airlines": airline_name,
-                "departure_time": str(departure) if departure else None,
-                "arrival_time": str(arrival) if arrival else None,
-                "duration": formatted_duration,
-                "stops": stops,
-                "is_best": is_best,
+                "airlines": airline_names,
+                "departure_time": overall_departure,
+                "arrival_time": overall_arrival,
+                "duration": total_duration,
+                "stops": num_stops,
+                "flight_type": flight_type,
             }
-        else:
-            return {
-                "price": price,
-                "airlines": airline_name,
-                "is_best": is_best,
-                "departure_time": str(departure) if departure else None,
-                "arrival_time": str(arrival) if arrival else None,
-                "total_duration": formatted_duration,
-                "stops": stops,
-                "flight_type": "Unknown",  # v2.2 doesn't expose this
-                "segments": [],  # v2.2 doesn't expose detailed segments
+
+        segments = []
+        for i, segment in enumerate(flight_segments):
+            from_airport = getattr(segment, "from_airport", None)
+            to_airport = getattr(segment, "to_airport", None)
+            leg_type = None
+            if is_round_trip and turn_around_index is not None:
+                leg_type = "outbound" if i < turn_around_index else "return"
+
+            segment_info = {
+                "segment_number": i + 1,
+                "from": {
+                    "airport_code": getattr(from_airport, "code", None),
+                    "airport_name": getattr(from_airport, "name", None),
+                }
+                if from_airport
+                else None,
+                "to": {
+                    "airport_code": getattr(to_airport, "code", None),
+                    "airport_name": getattr(to_airport, "name", None),
+                }
+                if to_airport
+                else None,
+                "departure": format_datetime(getattr(segment, "departure", None)),
+                "arrival": format_datetime(getattr(segment, "arrival", None)),
+                "duration": format_duration(getattr(segment, "duration", 0)),
+                "plane_type": getattr(segment, "plane_type", None),
             }
+            if leg_type:
+                segment_info["leg"] = leg_type
+            segments.append(segment_info)
+
+        return {
+            "price": price,
+            "airlines": airline_names,
+            "flight_type": flight_type,
+            "departure_time": overall_departure,
+            "arrival_time": overall_arrival,
+            "total_duration": total_duration,
+            "stops": num_stops,
+            "segments": segments,
+            "carbon_emissions": carbon_emission,
+        }
     except Exception as e:
-        log_error("_flight_to_dict_v2", type(e).__name__, str(e))
-        return {"error": f"Failed to parse v2.2 flight: {str(e)}"}
+        log_error("flight_to_dict", type(e).__name__, f"Error converting flight: {str(e)}")
+        return {
+            "error": f"Failed to parse flight data: {str(e)}",
+            "raw_data": str(flight),
+        }
 
 
 def parse_price(price):
@@ -322,12 +283,14 @@ def parse_price(price):
         price: Price value (can be int, string like '$268', or None)
 
     Returns:
-        Integer price or float('inf') if invalid
+        Integer price or float('inf') if invalid / unpriced
     """
     if price is None:
         return float('inf')
     if isinstance(price, int):
         return price
+    if isinstance(price, float):
+        return int(price) if price == price else float('inf')  # NaN guard
     if isinstance(price, str):
         try:
             return int(price.replace('$', '').replace(',', ''))
@@ -814,42 +777,42 @@ def try_serpapi_fallback(
 
 @mcp.resource("airports://all")
 def list_all_airports() -> str:
-    """List all available airports (first 100 for readability)."""
-    airports = get_all_airports()
-    airport_list = []
-    for airport in airports[:100]:
-        airport_list.append({
-            "code": airport.value,
-            "name": airport.name
-        })
-
-    result = {
-        "total_airports": len(airports),
-        "showing": len(airport_list),
-        "airports": airport_list
-    }
-    if len(airports) > 100:
-        result["note"] = f"Showing first 100 of {len(airports)} airports."
-
-    return json.dumps(result, indent=2)
+    """Airport enum was removed in fast-flights v3 — tools accept IATA codes directly."""
+    return json.dumps(
+        {
+            "airports": [],
+            "total_airports": 0,
+            "note": (
+                "fast-flights v3 no longer ships a built-in airport enum. "
+                "Pass standard 3-letter IATA codes (e.g. SFO, LAX, JFK) to search tools."
+            ),
+        },
+        indent=2,
+    )
 
 
 @mcp.resource("airports://{code}")
 def get_airport_by_code(code: str) -> str:
-    """Get information about a specific airport by its code."""
-    airports = get_all_airports()
-    code_upper = code.upper()
-
-    for airport in airports:
-        if airport.value.upper() == code_upper:
-            return json.dumps({
-                "code": airport.value,
-                "name": airport.name
-            }, indent=2)
-
-    return json.dumps({
-        "error": f"Airport code '{code}' not found"
-    })
+    """Validate an IATA-looking airport code (no local airport database in v3)."""
+    code_upper = (code or "").upper().strip()
+    if len(code_upper) == 3 and code_upper.isalpha():
+        return json.dumps(
+            {
+                "code": code_upper,
+                "note": (
+                    "Accepted as an IATA code. fast-flights v3 does not ship airport "
+                    "names; use this code directly in search tools."
+                ),
+            },
+            indent=2,
+        )
+    return json.dumps(
+        {
+            "error": f"'{code}' does not look like a 3-letter IATA airport code",
+            "type": "ValueError",
+        },
+        indent=2,
+    )
 
 
 # --- MCP Prompts ---
@@ -1243,9 +1206,9 @@ def reliable_search_strategy() -> str:
 **Try:** Verify airport codes, date formats, and try broader search parameters
 **Why:** Google Flights may not have availability for specific routes/dates
 
-### Problem: HTTP 401 Errors
-**Solution:** Update to the latest version - uses fetch_mode="common" to avoid authentication issues
-**Why:** Older versions used remote Playwright service that requires authentication
+### Problem: HTTP / scraping failures
+**Solution:** Retry, or set `SERPAPI_API_KEY` for automatic fallback
+**Why:** Google may block or rate-limit scrapers; SerpApi is more consistent
 
 ### Problem: Searches Timing Out
 **Try:** Reduce date ranges, especially for search_round_trips_in_date_range
@@ -1263,11 +1226,11 @@ def reliable_search_strategy() -> str:
 4. **Use compact_mode=true** - save ~40% tokens in responses
 5. **Limit results with max_results** - prevent token overload
 
-## 📊 New Features (v2.2)
+## 📊 fast-flights v3
 
-- **Price Context**: Every search now shows if prices are "low", "typical", or "high"
-- **Native Airline Filtering**: Built into fast-flights 2.2, more reliable than before
-- **Better Error Messages**: More helpful guidance when searches fail
+- **Round-trip packages**: Outbound + return segments in one result
+- **Native airline filtering**: IATA codes / alliances on the query
+- **Segments + carbon**: Detailed legs and emissions when available
 
 **What's your issue? Let me help you find the best solution!**"""
 
@@ -1358,9 +1321,6 @@ async def search_one_way_flights(
         # Validate date format
         datetime.datetime.strptime(date, '%Y-%m-%d')
 
-        flight_data = [
-            FlightData(date=date, from_airport=origin, to_airport=destination),
-        ]
         passengers_info = Passengers(
             adults=adults,
             children=children,
@@ -1368,26 +1328,26 @@ async def search_one_way_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
-        result = get_flights(
-            flight_data=flight_data,
+        log_info(TOOL, "Fetching flights from Google Flights (v3)...")
+        query = create_query(
+            flights=[FlightQuery(date=date, from_airport=origin, to_airport=destination)],
             trip="one-way",
-            seat=seat_type,
+            seat=normalize_seat_type(seat_type),
             passengers=passengers_info,
-            fetch_mode="common"  # Use standard HTTP, avoid remote Playwright auth issues
         )
+        result = get_flights(query)
 
         google_flights_url = _make_google_flights_url(origin, destination, date, seat=seat_type)
 
-        if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
+        if result:
+            log_info(TOOL, f"Found {len(result)} flight(s)")
 
             # Process flights based on the new parameter
             if return_cheapest_only:
-                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
+                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
             else:
-                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                flights_to_process = result[:max_results] if max_results > 0 else result
                 processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
             result_key = "flights"
 
@@ -1409,9 +1369,9 @@ async def search_one_way_flights(
             # Add result metadata for transparency
             if not return_cheapest_only and max_results > 0:
                 output_data["result_metadata"] = {
-                    "total_found": len(result.flights),
+                    "total_found": len(result),
                     "returned": len(processed_flights),
-                    "truncated": len(result.flights) > max_results
+                    "truncated": len(result) > max_results
                 }
 
             return json.dumps(output_data, indent=2)
@@ -1425,9 +1385,9 @@ async def search_one_way_flights(
          log_error(TOOL, "ValueError", f"Invalid date format: '{date}'. Use YYYY-MM-DD")
          error_payload = {"error": {"message": f"Invalid date format: '{date}'. Please use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
-    except RuntimeError as e:
+    except (RuntimeError, FlightsNotFound) as e:
         error_msg = str(e)
-        log_error(TOOL, "RuntimeError", error_msg)
+        log_error(TOOL, type(e).__name__, error_msg)
 
         # Try SerpApi fallback
         fallback_result = try_serpapi_fallback(
@@ -1456,7 +1416,7 @@ async def search_one_way_flights(
                 google_flights_url = url_match.group(1)
 
         # Check if it's a "No flights found" error from fast-flights
-        if "No flights found" in error_msg:
+        if isinstance(e, FlightsNotFound) or "no flights found" in error_msg.lower():
             response_data = {
                 "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
                 "search_parameters": {
@@ -1476,7 +1436,7 @@ async def search_one_way_flights(
                 response_data["google_flights_url"] = google_flights_url
             return json.dumps(response_data)
 
-        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
+        return json.dumps({"error": {"message": error_msg, "type": type(e).__name__}})
     except Exception as e:
         import traceback
         error_msg = str(e)
@@ -1571,10 +1531,6 @@ async def search_round_trip_flights(
         datetime.datetime.strptime(departure_date, '%Y-%m-%d')
         datetime.datetime.strptime(return_date, '%Y-%m-%d')
 
-        flight_data = [
-            FlightData(date=departure_date, from_airport=origin, to_airport=destination),
-            FlightData(date=return_date, from_airport=destination, to_airport=origin),
-        ]
         passengers_info = Passengers(
             adults=adults,
             children=children,
@@ -1582,31 +1538,33 @@ async def search_round_trip_flights(
             infants_on_lap=infants_on_lap
         )
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
-        result = get_flights(
-            flight_data=flight_data,
+        log_info(TOOL, "Fetching flights from Google Flights (v3)...")
+        query = create_query(
+            flights=[
+                FlightQuery(date=departure_date, from_airport=origin, to_airport=destination),
+                FlightQuery(date=return_date, from_airport=destination, to_airport=origin),
+            ],
             trip="round-trip",
-            seat=seat_type,
+            seat=normalize_seat_type(seat_type),
             passengers=passengers_info,
-            fetch_mode="common",  # Use local Playwright to avoid auth issues
-            max_stops=max_stops
+            max_stops=max_stops,
         )
+        result = get_flights(query)
 
         google_flights_url = _make_google_flights_url(origin, destination, departure_date, return_date=return_date, seat=seat_type)
 
-        if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} round-trip option(s)")
+        if result:
+            log_info(TOOL, f"Found {len(result)} round-trip option(s)")
             # Process flights based on the new parameter
             if return_cheapest_only:
-                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
+                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
                 processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode, origin=origin, destination=destination)]
             else:
-                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
+                flights_to_process = result[:max_results] if max_results > 0 else result
                 processed_flights = [flight_to_dict(f, compact=compact_mode, origin=origin, destination=destination) for f in flights_to_process]
             result_key = "flights"
 
-            # Note: The library might return combined round-trip options or separate legs.
-            # Assuming it returns combined options based on the original script's handling.
+            # v3 returns complete round-trip packages (outbound + return segments).
             output_data = {
                 "search_parameters": {
                     "origin": origin,
@@ -1622,7 +1580,11 @@ async def search_round_trip_flights(
                     "return_cheapest_only": return_cheapest_only
                 },
                 result_key: processed_flights,
-                "booking_url": google_flights_url
+                "booking_url": google_flights_url,
+                "round_trip_note": (
+                    "Complete round-trip packages with outbound and return segments "
+                    "(pre-combined by Google; not mix-and-match)."
+                ),
             }
             return json.dumps(output_data, indent=2)
         else:
@@ -1635,9 +1597,9 @@ async def search_round_trip_flights(
          log_error(TOOL, "ValueError", "Invalid date format provided. Use YYYY-MM-DD")
          error_payload = {"error": {"message": f"Invalid date format provided. Use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
-    except RuntimeError as e:
+    except (RuntimeError, FlightsNotFound) as e:
         error_msg = str(e)
-        log_error(TOOL, "RuntimeError", error_msg)
+        log_error(TOOL, type(e).__name__, error_msg)
 
         # Try SerpApi fallback
         fallback_result = try_serpapi_fallback(
@@ -1669,7 +1631,7 @@ async def search_round_trip_flights(
                 google_flights_url = url_match.group(1)
 
         # Check if it's a "No flights found" error from fast-flights
-        if "No flights found" in error_msg:
+        if isinstance(e, FlightsNotFound) or "no flights found" in error_msg.lower():
             response_data = {
                 "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
                 "search_parameters": {
@@ -1691,7 +1653,7 @@ async def search_round_trip_flights(
                 response_data["google_flights_url"] = google_flights_url
             return json.dumps(response_data)
 
-        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
+        return json.dumps({"error": {"message": error_msg, "type": type(e).__name__}})
     except Exception as e:
         import traceback
         error_msg = str(e)
@@ -1867,20 +1829,26 @@ async def search_round_trips_in_date_range(
             log_info(TOOL, f"Progress: {count}/{total_combinations} - {depart_date.strftime('%Y-%m-%d')}→{return_date.strftime('%Y-%m-%d')}")
 
         try:
-            flight_data = [
-                FlightData(date=depart_date.strftime('%Y-%m-%d'), from_airport=origin, to_airport=destination),
-                FlightData(date=return_date.strftime('%Y-%m-%d'), from_airport=destination, to_airport=origin),
-            ]
             passengers_info = Passengers(adults=adults)
-
-            result = get_flights(
-                flight_data=flight_data,
+            query = create_query(
+                flights=[
+                    FlightQuery(
+                        date=depart_date.strftime("%Y-%m-%d"),
+                        from_airport=origin,
+                        to_airport=destination,
+                    ),
+                    FlightQuery(
+                        date=return_date.strftime("%Y-%m-%d"),
+                        from_airport=destination,
+                        to_airport=origin,
+                    ),
+                ],
                 trip="round-trip",
-                seat=seat_type,
+                seat=normalize_seat_type(seat_type),
                 passengers=passengers_info,
-                fetch_mode="common",
-                max_stops=max_stops
+                max_stops=max_stops,
             )
+            result = get_flights(query)
 
             date_pair_url = _make_google_flights_url(
                 origin, destination,
@@ -1889,19 +1857,23 @@ async def search_round_trips_in_date_range(
             )
 
             # Collect results based on mode
-            if result and result.flights:
+            if result:
                 if return_cheapest_only:
                     # Find and store only the cheapest for this pair
-                    cheapest_flight_for_pair = min(result.flights, key=lambda f: parse_price(f.price))
+                    cheapest_flight_for_pair = min(result, key=lambda f: parse_price(f.price))
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
-                        "cheapest_flight": flight_to_dict(cheapest_flight_for_pair), # Store single cheapest
+                        "cheapest_flight": flight_to_dict(
+                            cheapest_flight_for_pair, origin=origin, destination=destination
+                        ),
                         "booking_url": date_pair_url
                     })
                 else:
                     # Store all flights for this pair
-                    flights_list = [flight_to_dict(f) for f in result.flights]
+                    flights_list = [
+                        flight_to_dict(f, origin=origin, destination=destination) for f in result
+                    ]
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
@@ -2024,83 +1996,71 @@ async def search_flights_by_airline(
             datetime.datetime.strptime(return_date, '%Y-%m-%d')
             log_debug(TOOL, "dates", f"{date} to {return_date}")
 
-            flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
-                FlightData(date=return_date, from_airport=destination, to_airport=origin),
+            flights = [
+                FlightQuery(
+                    date=date,
+                    from_airport=origin,
+                    to_airport=destination,
+                    airlines=airlines_list,
+                ),
+                FlightQuery(
+                    date=return_date,
+                    from_airport=destination,
+                    to_airport=origin,
+                    airlines=airlines_list,
+                ),
             ]
             trip_type = "round-trip"
         else:
             log_debug(TOOL, "date", date)
-            flight_data = [
-                FlightData(date=date, from_airport=origin, to_airport=destination),
+            flights = [
+                FlightQuery(
+                    date=date,
+                    from_airport=origin,
+                    to_airport=destination,
+                    airlines=airlines_list,
+                ),
             ]
             trip_type = "one-way"
 
         passengers_info = Passengers(adults=adults)
 
-        log_info(TOOL, "Fetching flights from Google Flights (v2.2)...")
-        result = get_flights(
-            flight_data=flight_data,
+        log_info(TOOL, "Fetching flights from Google Flights (v3, native airline filter)...")
+        query = create_query(
+            flights=flights,
             trip=trip_type,
-            seat=seat_type,
+            seat=normalize_seat_type(seat_type),
             passengers=passengers_info,
-            fetch_mode="common",
-            max_stops=max_stops
+            max_stops=max_stops,
         )
+        result = get_flights(query)
 
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
         )
 
-        if result and result.flights:
-            # Filter flights by airline (post-filtering since v2.2 doesn't support airline parameter)
-            log_info(TOOL, f"Filtering {len(result.flights)} flights by airlines: {airlines_list}")
-            filtered_flights = []
-
-            # Build a set of all possible airline name variations we're looking for
-            target_airline_names = set()
-            for airline_code_or_name in airlines_list:
-                # Add the original value (could be code or name)
-                target_airline_names.add(airline_code_or_name.upper())
-                # If it's a code, add all possible name variations
-                possible_names = get_airline_names_for_code(airline_code_or_name)
-                for name in possible_names:
-                    target_airline_names.add(name.upper())
-
-            log_debug(TOOL, "target_names", f"Looking for: {target_airline_names}")
-
-            for flight in result.flights:
-                # Get airline name from the flight object
-                flight_airline = getattr(flight, 'name', '')
-                if not flight_airline:
-                    continue
-
-                flight_airline_upper = flight_airline.upper()
-
-                # Check if the flight airline matches any of our target names
-                # Use exact match or substring match for flexibility
-                matches = False
-                for target in target_airline_names:
-                    if target in flight_airline_upper or flight_airline_upper in target:
-                        matches = True
-                        break
-
-                if matches:
-                    filtered_flights.append(flight)
-
-            log_info(TOOL, f"Found {len(filtered_flights)} flights matching specified airlines")
-            result.flights = filtered_flights
-
-        if result and result.flights:
-            log_info(TOOL, f"Found {len(result.flights)} flight(s)")
+        if result:
+            log_info(TOOL, f"Found {len(result)} flight(s)")
             if return_cheapest_only:
-                cheapest_flight = min(result.flights, key=lambda f: parse_price(f.price))
-                processed_flights = [flight_to_dict(cheapest_flight, compact=compact_mode)]
+                cheapest_flight = min(result, key=lambda f: parse_price(f.price))
+                processed_flights = [
+                    flight_to_dict(
+                        cheapest_flight,
+                        compact=compact_mode,
+                        origin=origin,
+                        destination=destination,
+                    )
+                ]
                 result_key = "flights"
             else:
-                flights_to_process = result.flights[:max_results] if max_results > 0 else result.flights
-                processed_flights = [flight_to_dict(f, compact=compact_mode) for f in flights_to_process]
+                flights_to_process = result[:max_results] if max_results > 0 else result
+                processed_flights = [
+                    flight_to_dict(
+                        f, compact=compact_mode, origin=origin, destination=destination
+                    )
+                    for f in flights_to_process
+                ]
                 result_key = "flights"
 
             output_data = {
@@ -2129,9 +2089,9 @@ async def search_flights_by_airline(
     except ValueError as e:
         log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
-    except RuntimeError as e:
+    except (RuntimeError, FlightsNotFound) as e:
         error_msg = str(e)
-        log_error(TOOL, "RuntimeError", error_msg)
+        log_error(TOOL, type(e).__name__, error_msg)
 
         # Try to extract the Google Flights URL from the error
         google_flights_url = None
@@ -2142,7 +2102,7 @@ async def search_flights_by_airline(
                 google_flights_url = url_match.group(1)
 
         # Check if it's a "No flights found" error from fast-flights
-        if "No flights found" in error_msg:
+        if isinstance(e, FlightsNotFound) or "no flights found" in error_msg.lower():
             response_data = {
                 "message": "The scraper couldn't find flights for the specified airlines, but you can view results directly on Google Flights.",
                 "search_parameters": {
@@ -2160,7 +2120,7 @@ async def search_flights_by_airline(
                 response_data["google_flights_url"] = google_flights_url
             return json.dumps(response_data)
 
-        return json.dumps({"error": {"message": error_msg, "type": "RuntimeError"}})
+        return json.dumps({"error": {"message": error_msg, "type": type(e).__name__}})
     except Exception as e:
         import traceback
         error_msg = str(e)
@@ -2231,22 +2191,15 @@ async def generate_google_flights_url(
             passenger_parts.append(f"{children} child{'ren' if children > 1 else ''}")
         passengers_str = " ".join(passenger_parts) if passenger_parts else "1 adult"
 
-        # Use fast-flights' own TFS encoder to build a real Google Flights URL
-        flight_data_list = [FlightData(date=departure_date, from_airport=origin, to_airport=destination)]
-        if return_date:
-            flight_data_list.append(FlightData(date=return_date, from_airport=destination, to_airport=origin))
-
-        trip = "round-trip" if return_date else "one-way"
-        seat = seat_type.replace("_", "-")  # e.g. premium_economy -> premium-economy
-
-        tfs_filter = create_filter(
-            flight_data=flight_data_list,
-            trip=trip,
-            seat=seat,
-            passengers=Passengers(adults=adults, children=children),
+        url = _make_google_flights_url(
+            origin,
+            destination,
+            departure_date,
+            return_date=return_date,
+            adults=adults,
+            children=children,
+            seat=seat_type,
         )
-        tfs_b64 = tfs_filter.as_b64().decode("utf-8")
-        url = f"https://www.google.com/travel/flights?tfs={tfs_b64}&hl=en&tfu=EgQIABABIgA"
 
         log_info(TOOL, f"URL generated successfully")
 
