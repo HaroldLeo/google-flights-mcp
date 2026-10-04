@@ -69,7 +69,7 @@ def _make_google_flights_url(
         tfs_b64 = create_filter(
             flight_data=flight_data_list,
             trip=trip,
-            seat=seat.replace("_", "-"),
+            seat=normalize_seat_type(seat),
             passengers=Passengers(adults=adults, children=children),
         ).as_b64().decode("utf-8")
         return f"https://www.google.com/travel/flights?tfs={tfs_b64}&hl=en&tfu=EgQIABABIgA"

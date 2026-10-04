@@ -75,6 +75,20 @@ def test_booking_url_keeps_selected_cabin(call, url_args):
     assert _booking_urls(output) == [expected]
 
 
+@pytest.mark.parametrize("call, url_args", [
+    (lambda: server.search_one_way_flights("SFO", "JFK", "2026-12-01", seat_type="Business"),
+     ("SFO", "JFK", "2026-12-01", None)),
+    (lambda: server.search_round_trip_flights("SFO", "JFK", "2026-12-01", "2026-12-08",
+                                              seat_type="Business"),
+     ("SFO", "JFK", "2026-12-01", "2026-12-08")),
+])
+def test_booking_url_accepts_mixed_case_cabin(call, url_args):
+    with patch.object(server, "get_flights", side_effect=_fake_get_flights([_flight("United")])):
+        output = _run(call())
+    assert "tfs=" in output["booking_url"]
+    assert output["booking_url"] == server._make_google_flights_url(*url_args, seat="business")
+
+
 FLIGHTS = [
     _flight("Qantas"),
     _flight("Alaska"),
@@ -138,7 +152,9 @@ def test_unmapped_codes_use_serpapi_airline_filter_when_enabled():
          patch.object(server, "try_serpapi_fallback", return_value=serpapi_output) as serpapi, \
          patch.object(server, "get_flights") as fast_flights:
         output = _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01",
-                                                       ["XX", "Star Alliance"]))
+                                                       ["XX", "Star Alliance"],
+                                                       seat_type="premium_economy"))
     assert output["data_source"] == "SerpApi (fallback)"
     assert serpapi.call_args.kwargs["airlines"] == ["XX", "STAR_ALLIANCE"]
+    assert serpapi.call_args.kwargs["seat_type"] == "premium_economy"
     fast_flights.assert_not_called()
