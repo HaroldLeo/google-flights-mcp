@@ -1926,6 +1926,7 @@ async def search_round_trips_in_date_range(
                 origin, destination,
                 depart_date.strftime('%Y-%m-%d'),
                 return_date=return_date.strftime('%Y-%m-%d'),
+                seat=seat_type,
             )
 
             # Collect results based on mode
@@ -2104,6 +2105,7 @@ async def search_flights_by_airline(
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
+            seat=seat_type,
         )
 
         if result and result.flights:
