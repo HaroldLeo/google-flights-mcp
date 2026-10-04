@@ -108,6 +108,8 @@ AIRLINE_CODE_TO_NAME = {
     "NK": ["Spirit", "Spirit Airlines"],
     "G4": ["Allegiant", "Allegiant Air"],
     "SY": ["Sun Country", "Sun Country Airlines"],
+    "HA": ["Hawaiian", "Hawaiian Airlines"],
+    "MX": ["Breeze", "Breeze Airways"],
 
     # Major International carriers
     "AC": ["Air Canada"],
@@ -139,6 +141,30 @@ AIRLINE_CODE_TO_NAME = {
     "CM": ["Copa Airlines"],
     "AV": ["Avianca"],
     "LA": ["LATAM", "LATAM Airlines"],
+    "AI": ["Air India"],
+    "NZ": ["Air New Zealand"],
+    "A3": ["Aegean", "Aegean Airlines"],
+    "OU": ["Croatia Airlines"],
+    "MS": ["EgyptAir"],
+    "ET": ["Ethiopian", "Ethiopian Airlines"],
+    "LO": ["LOT", "LOT Polish Airlines"],
+    "SA": ["South African Airways"],
+    "AR": ["Aerolíneas Argentinas", "Aerolineas Argentinas"],
+    "UX": ["Air Europa"],
+    "KQ": ["Kenya Airways"],
+    "ME": ["Middle East Airlines", "MEA"],
+    "SV": ["Saudia"],
+    "RO": ["TAROM"],
+    "FJ": ["Fiji Airways"],
+    "WY": ["Oman Air"],
+    "AT": ["Royal Air Maroc"],
+    "RJ": ["Royal Jordanian"],
+    "UL": ["SriLankan", "SriLankan Airlines"],
+    "FI": ["Icelandair"],
+    "VA": ["Virgin Australia"],
+    "PD": ["Porter", "Porter Airlines"],
+    "TS": ["Air Transat"],
+    "DE": ["Condor"],
 
     # Asian carriers
     "KE": ["Korean Air"],
@@ -153,6 +179,8 @@ AIRLINE_CODE_TO_NAME = {
     "MH": ["Malaysia Airlines"],
     "GA": ["Garuda Indonesia"],
     "PR": ["Philippine Airlines"],
+    "ZH": ["Shenzhen Airlines"],
+    "MF": ["XiamenAir", "Xiamen Airlines"],
 
     # Budget carriers
     "FR": ["Ryanair"],
@@ -161,36 +189,56 @@ AIRLINE_CODE_TO_NAME = {
     "W6": ["Wizz Air"],
     "TR": ["Scoot"],
     "AK": ["AirAsia"],
+    "DY": ["Norwegian"],
+    "EW": ["Eurowings"],
+    "PC": ["Pegasus", "Pegasus Airlines"],
+    "FZ": ["flydubai"],
+    "G9": ["Air Arabia"],
+    "6E": ["IndiGo"],
+    "JQ": ["Jetstar"],
+    "5J": ["Cebu Pacific"],
+    "Y4": ["Volaris"],
 }
 
-# Alliance membership limited to carriers present in AIRLINE_CODE_TO_NAME
 ALLIANCE_TO_CODES = {
     "STAR_ALLIANCE": [
-        "UA", "AC", "LH", "LX", "OS", "SN", "TP", "TK", "SQ", "NH",
-        "OZ", "BR", "CA", "TG", "CM", "AV",
+        "A3", "AC", "AI", "AV", "BR", "CA", "CM", "ET", "LH", "LO", "LX", "MS", "NH",
+        "NZ", "OS", "OU", "OZ", "SA", "SN", "SQ", "TG", "TK", "TP", "UA", "ZH",
     ],
     "SKYTEAM": [
-        "DL", "AF", "KL", "AM", "KE", "CI", "MU", "VN", "GA", "SK", "VS",
+        "AF", "AM", "AR", "CI", "DL", "GA", "KE", "KL", "KQ", "ME", "MF", "MU", "RO",
+        "SK", "SV", "UX", "VN", "VS",
     ],
     "ONEWORLD": [
-        "AA", "AS", "BA", "IB", "AY", "QR", "CX", "JL", "QF", "MH",
+        "AA", "AS", "AT", "AY", "BA", "CX", "FJ", "IB", "JL", "MH", "QF", "QR", "RJ",
+        "UL", "WY",
     ],
 }
+
+
+def normalize_airline_key(raw: str) -> str:
+    """Upper-case an airline input; alliance spellings like "Star Alliance" become "STAR_ALLIANCE"."""
+    key = raw.strip().upper()
+    alliance_key = key.replace(" ", "_").replace("-", "_")
+    return alliance_key if alliance_key in ALLIANCE_TO_CODES else key
+
+
+def is_iata_airline_code(key: str) -> bool:
+    return re.fullmatch(r"[A-Z0-9]{2}", key) is not None
 
 
 def expand_airline_filter(airlines: List[str]) -> tuple[set, List[str]]:
     """Expand airline codes and alliance names to the airline names fast-flights reports.
 
     Returns:
-        (set of upper-cased airline names, list of unrecognized inputs)
+        (set of upper-cased airline names, list of inputs with no name mapping)
     """
     names = set()
     unrecognized = []
     for raw in airlines:
-        key = raw.strip().upper()
-        alliance_key = key.replace(" ", "_").replace("-", "_")
-        if alliance_key in ALLIANCE_TO_CODES:
-            codes = ALLIANCE_TO_CODES[alliance_key]
+        key = normalize_airline_key(raw)
+        if key in ALLIANCE_TO_CODES:
+            codes = ALLIANCE_TO_CODES[key]
         elif key in AIRLINE_CODE_TO_NAME:
             codes = [key]
         else:
@@ -2032,7 +2080,8 @@ async def search_flights_by_airline(
         airlines: List of airline codes and/or alliance names.
                  - Airline codes: ["UA"], ["UA", "AA", "DL"] (2-letter IATA codes)
                  - Alliance: ["STAR_ALLIANCE"], ["SKYTEAM"], ["ONEWORLD"] (expands to member airlines)
-                 Unrecognized codes are ignored; if none are recognized an error is returned.
+                 Codes outside the built-in name table are filtered via SerpApi when SERPAPI_API_KEY
+                 is set; otherwise they are ignored (and an error is returned if none are usable).
         is_round_trip: If True, search round-trip flights (default: False).
         return_date: Return date for round-trips (YYYY-MM-DD format).
         adults: Number of adult passengers (default: 1).
@@ -2054,16 +2103,16 @@ async def search_flights_by_airline(
             return json.dumps({"error": {"message": "airlines parameter cannot be empty", "type": "ValueError"}})
 
         target_airline_names, unrecognized_airlines = expand_airline_filter(airlines_list)
-        if not target_airline_names:
+        unmapped_codes = [a for a in unrecognized_airlines if is_iata_airline_code(normalize_airline_key(a))]
+        if not target_airline_names and not (unmapped_codes and SERPAPI_ENABLED):
             return json.dumps({"error": {
                 "message": (
-                    f"Unrecognized airlines: {unrecognized_airlines}. Use 2-letter IATA codes from "
-                    f"{sorted(AIRLINE_CODE_TO_NAME)} or an alliance from {sorted(ALLIANCE_TO_CODES)}."
+                    f"No airline-name mapping for {unrecognized_airlines}. Google Flights scraping can only "
+                    f"filter by {sorted(AIRLINE_CODE_TO_NAME)} or an alliance from {sorted(ALLIANCE_TO_CODES)}. "
+                    "Other IATA codes need the SerpApi fallback (set SERPAPI_API_KEY)."
                 ),
                 "type": "ValueError"
             }})
-        if unrecognized_airlines:
-            log_info(TOOL, f"Ignoring unrecognized airlines: {unrecognized_airlines}")
 
         trip_desc = f"{'round-trip' if is_round_trip else 'one-way'}"
         log_info(TOOL, f"{trip_desc.capitalize()} {origin}→{destination} on {airlines_list}")
@@ -2089,6 +2138,34 @@ async def search_flights_by_airline(
                 FlightData(date=date, from_airport=origin, to_airport=destination),
             ]
             trip_type = "one-way"
+
+        if unmapped_codes and SERPAPI_ENABLED:
+            # fast-flights results only carry airline display names, so codes without a
+            # name mapping can only be filtered server-side by SerpApi's include_airlines.
+            log_info(TOOL, f"No airline-name mapping for {unmapped_codes}; using SerpApi airline filter")
+            serpapi_airlines = [
+                key for key in (normalize_airline_key(a) for a in airlines_list)
+                if key in ALLIANCE_TO_CODES or is_iata_airline_code(key)
+            ]
+            serpapi_output = try_serpapi_fallback(
+                TOOL, origin, destination, date,
+                return_date=return_date if is_round_trip else None,
+                adults=adults,
+                seat_type=seat_type,
+                max_stops=max_stops,
+                airlines=serpapi_airlines,
+                return_cheapest_only=return_cheapest_only,
+                max_results=max_results,
+            )
+            if serpapi_output:
+                return serpapi_output
+            if not target_airline_names:
+                return json.dumps({"error": {
+                    "message": f"SerpApi airline search returned no results for {serpapi_airlines}",
+                    "type": "RuntimeError"
+                }})
+        if unrecognized_airlines:
+            log_info(TOOL, f"Ignoring airlines with no name mapping: {unrecognized_airlines}")
 
         passengers_info = Passengers(adults=adults)
 
@@ -2148,6 +2225,8 @@ async def search_flights_by_airline(
                 result_key: processed_flights,
                 "booking_url": google_flights_url
             }
+            if unrecognized_airlines:
+                output_data["ignored_airlines"] = unrecognized_airlines
             return json.dumps(output_data, indent=2)
         else:
             return json.dumps({

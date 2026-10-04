@@ -52,6 +52,29 @@ def test_premium_economy_reaches_get_flights_normalized(call):
     assert all(c.kwargs["seat"] == "premium-economy" for c in mock.call_args_list)
 
 
+def _booking_urls(output):
+    if "booking_url" in output:
+        return [output["booking_url"]]
+    return [pair["booking_url"] for pair in output["all_round_trip_options"]]
+
+
+@pytest.mark.parametrize("call, url_args", [
+    (lambda: server.search_round_trips_in_date_range("SFO", "JFK", "2026-12-01", "2026-12-02",
+                                                     min_stay_days=1, max_stay_days=1,
+                                                     seat_type="premium_economy"),
+     ("SFO", "JFK", "2026-12-01", "2026-12-02")),
+    (lambda: server.search_flights_by_airline("SFO", "JFK", "2026-12-01", ["UA"],
+                                              seat_type="premium_economy"),
+     ("SFO", "JFK", "2026-12-01", None)),
+])
+def test_booking_url_keeps_selected_cabin(call, url_args):
+    with patch.object(server, "get_flights", side_effect=_fake_get_flights([_flight("United")])):
+        output = _run(call())
+    expected = server._make_google_flights_url(*url_args, seat="premium_economy")
+    assert expected != server._make_google_flights_url(*url_args)
+    assert _booking_urls(output) == [expected]
+
+
 FLIGHTS = [
     _flight("Qantas"),
     _flight("Alaska"),
@@ -59,26 +82,29 @@ FLIGHTS = [
     _flight("ANA"),
     _flight("United, Lufthansa"),
     _flight("Delta"),
+    _flight("Air India"),
 ]
 
 
-def _airline_names(airlines):
-    with patch.object(server, "get_flights", side_effect=_fake_get_flights(FLIGHTS)):
-        output = _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", airlines))
-    return [f["airlines"] for f in output.get("flights", [])], output
+def _search_by_airline(airlines):
+    with patch.object(server, "SERPAPI_ENABLED", False), \
+         patch.object(server, "get_flights", side_effect=_fake_get_flights(FLIGHTS)):
+        return _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", airlines))
 
 
 @pytest.mark.parametrize("airlines, expected", [
     (["AS"], ["Alaska"]),
     (["NH"], ["ANA"]),
+    (["AI"], ["Air India"]),
     (["UA", "DL"], ["United, Lufthansa", "Delta"]),
-    (["STAR_ALLIANCE"], ["Air Canada", "ANA", "United, Lufthansa"]),
+    (["STAR_ALLIANCE"], ["Air Canada", "ANA", "United, Lufthansa", "Air India"]),
     (["SKYTEAM"], ["Delta"]),
     (["oneworld"], ["Qantas", "Alaska"]),
 ])
 def test_airline_filter_matches_expanded_names_only(airlines, expected):
-    names, _ = _airline_names(airlines)
-    assert names == expected
+    output = _search_by_airline(airlines)
+    assert [f["airlines"] for f in output["flights"]] == expected
+    assert "ignored_airlines" not in output
 
 
 def test_raw_code_does_not_substring_match_other_airlines():
@@ -88,8 +114,31 @@ def test_raw_code_does_not_substring_match_other_airlines():
     assert server.flight_matches_airlines("Alaska", targets)
 
 
-def test_unrecognized_airlines_return_error_without_searching():
-    with patch.object(server, "get_flights") as mock:
+def test_alliance_members_all_have_name_mappings():
+    for codes in server.ALLIANCE_TO_CODES.values():
+        assert set(codes) <= set(server.AIRLINE_CODE_TO_NAME)
+
+
+def test_unmapped_codes_are_reported_alongside_mapped_ones():
+    output = _search_by_airline(["UA", "XX"])
+    assert [f["airlines"] for f in output["flights"]] == ["United, Lufthansa"]
+    assert output["ignored_airlines"] == ["XX"]
+
+
+def test_unmapped_codes_without_serpapi_return_error_without_searching():
+    with patch.object(server, "SERPAPI_ENABLED", False), patch.object(server, "get_flights") as mock:
         output = _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", ["XX"]))
     assert output["error"]["type"] == "ValueError"
     mock.assert_not_called()
+
+
+def test_unmapped_codes_use_serpapi_airline_filter_when_enabled():
+    serpapi_output = json.dumps({"flights": [{"airline": "Example Air"}], "data_source": "SerpApi (fallback)"})
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "try_serpapi_fallback", return_value=serpapi_output) as serpapi, \
+         patch.object(server, "get_flights") as fast_flights:
+        output = _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01",
+                                                       ["XX", "Star Alliance"]))
+    assert output["data_source"] == "SerpApi (fallback)"
+    assert serpapi.call_args.kwargs["airlines"] == ["XX", "STAR_ALLIANCE"]
+    fast_flights.assert_not_called()
