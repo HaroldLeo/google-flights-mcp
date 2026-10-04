@@ -87,6 +87,36 @@ def test_flight_to_dict_one_way_has_no_price_note():
     assert "price_note" not in payload
 
 
+def test_flight_to_dict_compact_round_trip_keeps_price_note():
+    payload = flight_to_dict(_flight(), compact=True, trip="round-trip")
+
+    assert payload["price_note"] == (
+        "Price is the round-trip total for this outbound option; "
+        "return flight segments are not included in fast-flights results."
+    )
+
+
+def test_flight_to_dict_does_not_use_carrier_as_flight_type():
+    payload = flight_to_dict(_flight())
+
+    assert payload["flight_type"] is None
+
+
+def test_flight_to_dict_duration_includes_layover():
+    first = _segment("SFO", "DEN")
+    second = _segment("DEN", "JFK")
+    second.departure = SimpleNamespace(date=(2026, 11, 2), time=(14, 40))
+    second.arrival = SimpleNamespace(date=(2026, 11, 2), time=(20, 0))
+    flight = _flight()
+    flight.flights = [first, second]
+
+    payload = flight_to_dict(flight, trip="one-way")
+    compact = flight_to_dict(flight, compact=True, trip="one-way")
+
+    assert payload["total_duration"] == "11h 45m"
+    assert compact["duration"] == "11h 45m"
+
+
 def test_round_trip_url_includes_tfs_and_tfu():
     url = _make_google_flights_url(
         "SFO",

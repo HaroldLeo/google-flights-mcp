@@ -116,6 +116,21 @@ def log_debug(tool_name: str, key: str, value: Any):
     """Structured debug logging for MCP tools."""
     print(f"[{tool_name}] DEBUG: {key} = {value}", file=sys.stderr)
 
+def _as_datetime(simple_datetime):
+    if not simple_datetime:
+        return None
+    try:
+        year, month, day = simple_datetime.date
+        time_attr = getattr(simple_datetime, "time", None)
+        hour, minute = 0, 0
+        if time_attr is not None and len(time_attr) >= 2:
+            hour = time_attr[0] or 0
+            minute = time_attr[1] or 0
+        return datetime.datetime(year, month, day, hour, minute)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def format_datetime(simple_datetime):
     """Convert SimpleDatetime object to ISO format string.
 
@@ -182,7 +197,7 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=No
         elif trip == "one-way":
             flight_type = "one-way"
         else:
-            flight_type = str(raw_type) if raw_type else None
+            flight_type = None
 
         num_stops = max(len(flight_segments) - 1, 0) if flight_segments else 0
 
@@ -191,12 +206,19 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=No
         total_duration_minutes = 0
 
         if flight_segments:
-            overall_departure = format_datetime(getattr(flight_segments[0], "departure", None))
-            overall_arrival = format_datetime(getattr(flight_segments[-1], "arrival", None))
-            for segment in flight_segments:
-                duration = getattr(segment, "duration", 0)
-                if isinstance(duration, int):
-                    total_duration_minutes += duration
+            first = flight_segments[0]
+            last = flight_segments[-1]
+            overall_departure = format_datetime(getattr(first, "departure", None))
+            overall_arrival = format_datetime(getattr(last, "arrival", None))
+            start = _as_datetime(getattr(first, "departure", None))
+            end = _as_datetime(getattr(last, "arrival", None))
+            if start and end and end >= start:
+                total_duration_minutes = int((end - start).total_seconds() // 60)
+            else:
+                for segment in flight_segments:
+                    duration = getattr(segment, "duration", 0)
+                    if isinstance(duration, int):
+                        total_duration_minutes += duration
 
         total_duration = (
             format_duration(total_duration_minutes) if total_duration_minutes > 0 else None
@@ -214,7 +236,7 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=No
                 }
 
         if compact:
-            return {
+            payload = {
                 "price": price,
                 "airlines": airline_names,
                 "departure_time": overall_departure,
@@ -223,6 +245,12 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=No
                 "stops": num_stops,
                 "flight_type": flight_type,
             }
+            if trip == "round-trip":
+                payload["price_note"] = (
+                    "Price is the round-trip total for this outbound option; "
+                    "return flight segments are not included in fast-flights results."
+                )
+            return payload
 
         segments = []
         for i, segment in enumerate(flight_segments):
@@ -520,8 +548,7 @@ def get_return_flights_from_serpapi(departure_token: str) -> Optional[Dict]:
         params = {
             "engine": "google_flights",
             "api_key": SERPAPI_API_KEY,
-            "departure_id": departure_token,
-            "type": 3  # Type 3 indicates return flights query
+            "departure_token": departure_token,
         }
 
         search = GoogleSearch(params)
