@@ -58,7 +58,6 @@ else:
         print(f"[SerpApi] API key not configured - set SERPAPI_API_KEY env var for fallback support", file=sys.stderr)
 
 def normalize_seat_type(seat_type: str) -> str:
-    """Map tool seat args (premium_economy) to fast-flights seat keys (premium-economy)."""
     return (seat_type or "economy").replace("_", "-").lower()
 
 
@@ -71,7 +70,6 @@ def _make_google_flights_url(
     children: int = 0,
     seat: str = "economy",
 ) -> str:
-    """Build a working Google Flights URL using fast-flights' TFS encoder."""
     try:
         flights = [
             FlightQuery(date=departure_date, from_airport=origin, to_airport=destination)
@@ -89,7 +87,6 @@ def _make_google_flights_url(
         )
         return query.url()
     except Exception:
-        # Fallback to simple query URL if encoding fails
         return f"https://www.google.com/travel/flights?q={origin}+to+{destination}"
 
 
@@ -159,16 +156,6 @@ def format_duration(minutes):
         return f"{mins}m"
 
 def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=None):
-    """Convert a fast-flights v3 Flights object to a response dict.
-
-    Notes on Google Flights / fast-flights v3:
-    - ``flight.type`` is usually a marketing carrier code (e.g. ``UA``), not
-      "round-trip". ``multi`` means more than one carrier.
-    - For ``trip="round-trip"`` searches, the first results page still lists
-      *outbound* itineraries (with connection segments). ``price`` is the
-      round-trip total for the cheapest paired return, but return legs are not
-      included in ``flight.flights``. Use SerpApi fallback for return options.
-    """
     try:
         price = getattr(flight, "price", None)
         airlines = getattr(flight, "airlines", []) or []
@@ -185,7 +172,6 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=No
         else:
             flight_type = str(raw_type) if raw_type else None
 
-        # Connection stops on the returned itinerary (outbound page for RT).
         num_stops = max(len(flight_segments) - 1, 0) if flight_segments else 0
 
         overall_departure = None
@@ -279,20 +265,12 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=No
 
 
 def parse_price(price):
-    """Extracts integer price from a price value.
-
-    Args:
-        price: Price value (can be int, string like '$268', or None)
-
-    Returns:
-        Integer price or float('inf') if invalid / unpriced
-    """
     if price is None:
         return float('inf')
     if isinstance(price, int):
         return price
     if isinstance(price, float):
-        return int(price) if price == price else float('inf')  # NaN guard
+        return int(price) if price == price else float('inf')
     if isinstance(price, str):
         try:
             return int(price.replace('$', '').replace(',', ''))
@@ -1345,7 +1323,6 @@ async def search_one_way_flights(
         if result:
             log_info(TOOL, f"Found {len(result)} flight(s)")
 
-            # Process flights based on the new parameter
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
                 processed_flights = [
@@ -1374,7 +1351,6 @@ async def search_one_way_flights(
                 result_key: processed_flights,
                 "booking_url": google_flights_url
             }
-            # Add result metadata for transparency
             if not return_cheapest_only and max_results > 0:
                 output_data["result_metadata"] = {
                     "total_found": len(result),
@@ -1397,7 +1373,6 @@ async def search_one_way_flights(
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
 
-        # Try SerpApi fallback
         fallback_result = try_serpapi_fallback(
             tool_name=TOOL,
             origin=origin,
@@ -1415,7 +1390,6 @@ async def search_one_way_flights(
         if fallback_result:
             return fallback_result
 
-        # Try to extract the Google Flights URL from the error
         google_flights_url = None
         if "https://www.google.com/travel/flights" in error_msg:
             import re
@@ -1423,7 +1397,6 @@ async def search_one_way_flights(
             if url_match:
                 google_flights_url = url_match.group(1)
 
-        # Check if it's a "No flights found" error from fast-flights
         if isinstance(e, FlightsNotFound) or "no flights found" in error_msg.lower():
             response_data = {
                 "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
@@ -1563,7 +1536,6 @@ async def search_round_trip_flights(
 
         if result:
             log_info(TOOL, f"Found {len(result)} round-trip option(s)")
-            # Process flights based on the new parameter
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
                 processed_flights = [
@@ -1626,7 +1598,6 @@ async def search_round_trip_flights(
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
 
-        # Try SerpApi fallback
         fallback_result = try_serpapi_fallback(
             tool_name=TOOL,
             origin=origin,
@@ -1645,17 +1616,13 @@ async def search_round_trip_flights(
         if fallback_result:
             return fallback_result
 
-        # Try to extract the Google Flights URL from the error
-        # The fast-flights library often includes the URL in the error trace
         google_flights_url = None
         if "https://www.google.com/travel/flights" in error_msg:
-            # Extract the URL from the error message
             import re
             url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
             if url_match:
                 google_flights_url = url_match.group(1)
 
-        # Check if it's a "No flights found" error from fast-flights
         if isinstance(e, FlightsNotFound) or "no flights found" in error_msg.lower():
             response_data = {
                 "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
@@ -1881,10 +1848,8 @@ async def search_round_trips_in_date_range(
                 return_date=return_date.strftime('%Y-%m-%d'),
             )
 
-            # Collect results based on mode
             if result:
                 if return_cheapest_only:
-                    # Find and store only the cheapest for this pair
                     cheapest_flight_for_pair = min(result, key=lambda f: parse_price(f.price))
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
@@ -1898,7 +1863,6 @@ async def search_round_trips_in_date_range(
                         "booking_url": date_pair_url
                     })
                 else:
-                    # Store all flights for this pair
                     flights_list = [
                         flight_to_dict(
                             f, origin=origin, destination=destination, trip="round-trip"
@@ -1908,11 +1872,9 @@ async def search_round_trips_in_date_range(
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
                         "return_date": return_date.strftime('%Y-%m-%d'),
-                        "flights": flights_list, # Store list of all flights
+                        "flights": flights_list,
                         "booking_url": date_pair_url
                     })
-            # else: # Optional: Log if no flights were found for a specific pair
-                # print(f"MCP Tool: No flights found for {depart_date.strftime('%Y-%m-%d')} -> {return_date.strftime('%Y-%m-%d')}", file=sys.stderr)
 
         except Exception as e:
             date_str = f"{depart_date.strftime('%Y-%m-%d')}→{return_date.strftime('%Y-%m-%d')}"
@@ -2129,7 +2091,6 @@ async def search_flights_by_airline(
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
 
-        # Try to extract the Google Flights URL from the error
         google_flights_url = None
         if "https://www.google.com/travel/flights" in error_msg:
             import re
@@ -2137,7 +2098,6 @@ async def search_flights_by_airline(
             if url_match:
                 google_flights_url = url_match.group(1)
 
-        # Check if it's a "No flights found" error from fast-flights
         if isinstance(e, FlightsNotFound) or "no flights found" in error_msg.lower():
             response_data = {
                 "message": "The scraper couldn't find flights for the specified airlines, but you can view results directly on Google Flights.",
