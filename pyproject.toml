@@ -26,10 +26,10 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.2.0",
+    "mcp>=1.13,<2",
     "fast-flights==2.2",
     "google-search-results>=2.4.2",
-    "aiohttp>=3.9.0",
+    "uvicorn>=0.31.1",
 ]
 
 [project.urls]
