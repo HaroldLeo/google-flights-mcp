@@ -1,9 +1,14 @@
+import json
 from types import SimpleNamespace
 
+import pytest
+
 from mcp_server_google_flights.server import (
+    InvalidDateFormat,
     _make_google_flights_url,
     flight_to_dict,
     normalize_seat_type,
+    parse_iso_date,
     parse_price,
 )
 
@@ -41,6 +46,24 @@ def test_parse_price_literals():
     assert parse_price(None) == float("inf")
     assert parse_price("$1,200") == 1200
     assert parse_price(99) == 99
+    assert parse_price(float("nan")) == float("inf")
+    assert parse_price(float("inf")) == float("inf")
+
+
+def test_parse_iso_date_accepts_calendar_day():
+    parsed = parse_iso_date("2026-11-02")
+    assert (parsed.year, parsed.month, parsed.day) == (2026, 11, 2)
+
+
+def test_parse_iso_date_rejects_garbage():
+    with pytest.raises(InvalidDateFormat):
+        parse_iso_date("not-a-date")
+
+
+def test_json_decode_error_is_not_invalid_date_format():
+    with pytest.raises(json.JSONDecodeError) as caught:
+        json.loads("{")
+    assert not isinstance(caught.value, InvalidDateFormat)
 
 
 def test_flight_to_dict_round_trip_marks_outbound_selection():

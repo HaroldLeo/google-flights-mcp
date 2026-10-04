@@ -3,6 +3,7 @@
 import asyncio
 import json
 import datetime
+import math
 import sys
 import os
 from typing import Any, Optional, Dict, List
@@ -56,6 +57,17 @@ else:
         print(f"[SerpApi] Not available - install google-search-results", file=sys.stderr)
     elif not SERPAPI_API_KEY:
         print(f"[SerpApi] API key not configured - set SERPAPI_API_KEY env var for fallback support", file=sys.stderr)
+
+class InvalidDateFormat(ValueError):
+    pass
+
+
+def parse_iso_date(value: str) -> datetime.datetime:
+    try:
+        return datetime.datetime.strptime(value, "%Y-%m-%d")
+    except ValueError as exc:
+        raise InvalidDateFormat(str(exc)) from exc
+
 
 def normalize_seat_type(seat_type: str) -> str:
     return (seat_type or "economy").replace("_", "-").lower()
@@ -270,7 +282,9 @@ def parse_price(price):
     if isinstance(price, int):
         return price
     if isinstance(price, float):
-        return int(price) if price == price else float('inf')
+        if not math.isfinite(price):
+            return float("inf")
+        return int(price)
     if isinstance(price, str):
         try:
             return int(price.replace('$', '').replace(',', ''))
@@ -1038,7 +1052,7 @@ def loyalty_program_optimizer() -> str:
 
 **Result:** I'll find flights on your preferred airline/alliance, show you the best mileage-earning options, and provide strategies to maximize your loyalty benefits.
 
-NOTE: Now with fast-flights 2.2, airline filtering is native and more reliable. All searches show price context (low/typical/high) to help you decide if it's a good time to book!"""
+NOTE: Airline filtering uses IATA codes or alliances on the query. Round-trip scraper results are outbound options with a round-trip total price."""
 
 
 @mcp.prompt()
@@ -1300,7 +1314,7 @@ async def search_one_way_flights(
 
     try:
         # Validate date format
-        datetime.datetime.strptime(date, '%Y-%m-%d')
+        parse_iso_date(date)
 
         passengers_info = Passengers(
             adults=adults,
@@ -1365,11 +1379,11 @@ async def search_one_way_flights(
                 "search_parameters": { "origin": origin, "destination": destination, "date": date, "adults": adults, "seat_type": seat_type }
              })
 
-    except ValueError as e:
+    except InvalidDateFormat as e:
          log_error(TOOL, "ValueError", f"Invalid date format: '{date}'. Use YYYY-MM-DD")
          error_payload = {"error": {"message": f"Invalid date format: '{date}'. Please use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
-    except (RuntimeError, FlightsNotFound) as e:
+    except FlightsNotFound as e:
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
 
@@ -1390,34 +1404,24 @@ async def search_one_way_flights(
         if fallback_result:
             return fallback_result
 
-        google_flights_url = None
-        if "https://www.google.com/travel/flights" in error_msg:
-            import re
-            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
-            if url_match:
-                google_flights_url = url_match.group(1)
-
-        if isinstance(e, FlightsNotFound) or "no flights found" in error_msg.lower():
-            response_data = {
-                "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
-                "search_parameters": {
-                    "origin": origin,
-                    "destination": destination,
-                    "date": date,
-                    "adults": adults,
-                    "children": children,
-                    "infants_in_seat": infants_in_seat,
-                    "infants_on_lap": infants_on_lap,
-                    "seat_type": seat_type
-                },
-                "note": "One-way searches may not return results via scraping. Click the URL below to view flights in your browser.",
-                "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
-            }
-            if google_flights_url:
-                response_data["google_flights_url"] = google_flights_url
-            return json.dumps(response_data)
-
-        return json.dumps({"error": {"message": error_msg, "type": type(e).__name__}})
+        google_flights_url = _make_google_flights_url(origin, destination, date, seat=seat_type)
+        response_data = {
+            "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
+            "search_parameters": {
+                "origin": origin,
+                "destination": destination,
+                "date": date,
+                "adults": adults,
+                "children": children,
+                "infants_in_seat": infants_in_seat,
+                "infants_on_lap": infants_on_lap,
+                "seat_type": seat_type
+            },
+            "note": "One-way searches may not return results via scraping. Click the URL below to view flights in your browser.",
+            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None,
+            "google_flights_url": google_flights_url,
+        }
+        return json.dumps(response_data)
     except Exception as e:
         import traceback
         error_msg = str(e)
@@ -1442,21 +1446,13 @@ async def search_one_way_flights(
         if fallback_result:
             return fallback_result
 
-        # Try to extract URL from any exception
-        google_flights_url = None
-        if "https://www.google.com/travel/flights" in error_msg:
-            import re
-            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
-            if url_match:
-                google_flights_url = url_match.group(1)
-
+        google_flights_url = _make_google_flights_url(origin, destination, date, seat=seat_type)
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
             "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly.",
-            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
+            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None,
+            "google_flights_url": google_flights_url,
         }
-        if google_flights_url:
-            response_data["google_flights_url"] = google_flights_url
         return json.dumps(response_data)
 
 
@@ -1509,8 +1505,8 @@ async def search_round_trip_flights(
 
     try:
         # Validate date formats
-        datetime.datetime.strptime(departure_date, '%Y-%m-%d')
-        datetime.datetime.strptime(return_date, '%Y-%m-%d')
+        parse_iso_date(departure_date)
+        parse_iso_date(return_date)
 
         passengers_info = Passengers(
             adults=adults,
@@ -1580,7 +1576,7 @@ async def search_round_trip_flights(
                 "round_trip_note": (
                     "Results are outbound options with round-trip total prices. "
                     "Return legs are not included by fast-flights (same as Google's "
-                    "first results page). Set SERPAPI_API_KEY for return-flight packages."
+                    "first results page)."
                 ),
             }
             return json.dumps(output_data, indent=2)
@@ -1590,11 +1586,11 @@ async def search_round_trip_flights(
                  "search_parameters": { "origin": origin, "destination": destination, "departure_date": departure_date, "return_date": return_date, "adults": adults, "seat_type": seat_type, "max_stops": max_stops }
             })
 
-    except ValueError as e:
+    except InvalidDateFormat as e:
          log_error(TOOL, "ValueError", "Invalid date format provided. Use YYYY-MM-DD")
          error_payload = {"error": {"message": f"Invalid date format provided. Use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
-    except (RuntimeError, FlightsNotFound) as e:
+    except FlightsNotFound as e:
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
 
@@ -1616,36 +1612,28 @@ async def search_round_trip_flights(
         if fallback_result:
             return fallback_result
 
-        google_flights_url = None
-        if "https://www.google.com/travel/flights" in error_msg:
-            import re
-            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
-            if url_match:
-                google_flights_url = url_match.group(1)
-
-        if isinstance(e, FlightsNotFound) or "no flights found" in error_msg.lower():
-            response_data = {
-                "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
-                "search_parameters": {
-                    "origin": origin,
-                    "destination": destination,
-                    "departure_date": departure_date,
-                    "return_date": return_date,
-                    "adults": adults,
-                    "children": children,
-                    "infants_in_seat": infants_in_seat,
-                    "infants_on_lap": infants_on_lap,
-                    "seat_type": seat_type,
-                    "max_stops": max_stops
-                },
-                "note": f"Round-trip searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser.",
-                "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
-            }
-            if google_flights_url:
-                response_data["google_flights_url"] = google_flights_url
-            return json.dumps(response_data)
-
-        return json.dumps({"error": {"message": error_msg, "type": type(e).__name__}})
+        google_flights_url = _make_google_flights_url(
+            origin, destination, departure_date, return_date=return_date, seat=seat_type
+        )
+        response_data = {
+            "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
+            "search_parameters": {
+                "origin": origin,
+                "destination": destination,
+                "departure_date": departure_date,
+                "return_date": return_date,
+                "adults": adults,
+                "children": children,
+                "infants_in_seat": infants_in_seat,
+                "infants_on_lap": infants_on_lap,
+                "seat_type": seat_type,
+                "max_stops": max_stops
+            },
+            "note": f"Round-trip searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser.",
+            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None,
+            "google_flights_url": google_flights_url,
+        }
+        return json.dumps(response_data)
     except Exception as e:
         import traceback
         error_msg = str(e)
@@ -1671,21 +1659,15 @@ async def search_round_trip_flights(
         if fallback_result:
             return fallback_result
 
-        # Try to extract URL from any exception
-        google_flights_url = None
-        if "https://www.google.com/travel/flights" in error_msg:
-            import re
-            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
-            if url_match:
-                google_flights_url = url_match.group(1)
-
+        google_flights_url = _make_google_flights_url(
+            origin, destination, departure_date, return_date=return_date, seat=seat_type
+        )
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
             "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly.",
-            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
+            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None,
+            "google_flights_url": google_flights_url,
         }
-        if google_flights_url:
-            response_data["google_flights_url"] = google_flights_url
         return json.dumps(response_data)
 
 
@@ -1754,9 +1736,9 @@ async def search_round_trips_in_date_range(
     error_messages = []
 
     try:
-        start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d').date()
-    except ValueError as e:
+        start_date = parse_iso_date(start_date_str).date()
+        end_date = parse_iso_date(end_date_str).date()
+    except InvalidDateFormat as e:
         # Return structured error
         error_payload = {"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}}
         return json.dumps(error_payload)
@@ -1981,12 +1963,12 @@ async def search_flights_by_airline(
         log_debug(TOOL, "constraints", f"max_stops={max_stops}, seat={seat_type}, adults={adults}")
 
         # Validate dates
-        datetime.datetime.strptime(date, '%Y-%m-%d')
+        parse_iso_date(date)
 
         if is_round_trip:
             if not return_date:
                 return json.dumps({"error": {"message": "return_date is required when is_round_trip=True", "type": "ValueError"}})
-            datetime.datetime.strptime(return_date, '%Y-%m-%d')
+            parse_iso_date(return_date)
             log_debug(TOOL, "dates", f"{date} to {return_date}")
 
             flights = [
@@ -2084,56 +2066,46 @@ async def search_flights_by_airline(
                 "search_parameters": {"origin": origin, "destination": destination, "date": date, "airlines": airlines_list, "max_stops": max_stops}
             })
 
-    except ValueError as e:
+    except InvalidDateFormat as e:
         log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
-    except (RuntimeError, FlightsNotFound) as e:
+    except FlightsNotFound as e:
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
 
-        google_flights_url = None
-        if "https://www.google.com/travel/flights" in error_msg:
-            import re
-            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
-            if url_match:
-                google_flights_url = url_match.group(1)
-
-        if isinstance(e, FlightsNotFound) or "no flights found" in error_msg.lower():
-            response_data = {
-                "message": "The scraper couldn't find flights for the specified airlines, but you can view results directly on Google Flights.",
-                "search_parameters": {
-                    "origin": origin,
-                    "destination": destination,
-                    "date": date,
-                    "airlines": airlines_list,
-                    "is_round_trip": is_round_trip,
-                    "return_date": return_date if is_round_trip else None,
-                    "max_stops": max_stops
-                },
-                "note": f"Airline-filtered searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser."
-            }
-            if google_flights_url:
-                response_data["google_flights_url"] = google_flights_url
-            return json.dumps(response_data)
-
-        return json.dumps({"error": {"message": error_msg, "type": type(e).__name__}})
+        google_flights_url = _make_google_flights_url(
+            origin, destination, date,
+            return_date=return_date if is_round_trip else None,
+        )
+        response_data = {
+            "message": "The scraper couldn't find flights for the specified airlines, but you can view results directly on Google Flights.",
+            "search_parameters": {
+                "origin": origin,
+                "destination": destination,
+                "date": date,
+                "airlines": airlines_list,
+                "is_round_trip": is_round_trip,
+                "return_date": return_date if is_round_trip else None,
+                "max_stops": max_stops
+            },
+            "note": f"Airline-filtered searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser.",
+            "google_flights_url": google_flights_url,
+        }
+        return json.dumps(response_data)
     except Exception as e:
         import traceback
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
         log_debug(TOOL, "traceback", traceback.format_exc())
 
-        # Try to extract URL from any exception
-        google_flights_url = None
-        if "https://www.google.com/travel/flights" in error_msg:
-            import re
-            url_match = re.search(r'(https://www\.google\.com/travel/flights[^\s]+)', error_msg)
-            if url_match:
-                google_flights_url = url_match.group(1)
-
-        response_data = {"error": {"message": f"{type(e).__name__}: {error_msg}", "type": type(e).__name__}}
-        if google_flights_url:
-            response_data["google_flights_url"] = google_flights_url
+        google_flights_url = _make_google_flights_url(
+            origin, destination, date,
+            return_date=return_date if is_round_trip else None,
+        )
+        response_data = {
+            "error": {"message": f"{type(e).__name__}: {error_msg}", "type": type(e).__name__},
+            "google_flights_url": google_flights_url,
+        }
         return json.dumps(response_data)
 
 
@@ -2175,9 +2147,9 @@ async def generate_google_flights_url(
         log_info(TOOL, f"Generating {trip_type} URL: {origin}→{destination}")
 
         # Validate dates
-        datetime.datetime.strptime(departure_date, '%Y-%m-%d')
+        parse_iso_date(departure_date)
         if return_date:
-            datetime.datetime.strptime(return_date, '%Y-%m-%d')
+            parse_iso_date(return_date)
 
         # Build passenger info string for display
         passenger_parts = []
@@ -2215,7 +2187,7 @@ async def generate_google_flights_url(
 
         return json.dumps(output_data, indent=2)
 
-    except ValueError as e:
+    except InvalidDateFormat as e:
         log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
     except Exception as e:
