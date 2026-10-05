@@ -97,6 +97,7 @@ FLIGHTS = [
     _flight("United, Lufthansa"),
     _flight("Delta"),
     _flight("Air India"),
+    _flight("Hawaiian"),
 ]
 
 
@@ -113,7 +114,7 @@ def _search_by_airline(airlines):
     (["UA", "DL"], ["United, Lufthansa", "Delta"]),
     (["STAR_ALLIANCE"], ["Air Canada", "ANA", "United, Lufthansa", "Air India"]),
     (["SKYTEAM"], ["Delta"]),
-    (["oneworld"], ["Qantas", "Alaska"]),
+    (["oneworld"], ["Qantas", "Alaska", "Hawaiian"]),
 ])
 def test_airline_filter_matches_expanded_names_only(airlines, expected):
     output = _search_by_airline(airlines)

@@ -210,8 +210,8 @@ ALLIANCE_TO_CODES = {
         "SK", "SV", "UX", "VN", "VS",
     ],
     "ONEWORLD": [
-        "AA", "AS", "AT", "AY", "BA", "CX", "FJ", "IB", "JL", "MH", "QF", "QR", "RJ",
-        "UL", "WY",
+        "AA", "AS", "AT", "AY", "BA", "CX", "FJ", "HA", "IB", "JL", "MH", "QF", "QR",
+        "RJ", "UL", "WY",
     ],
 }
 
