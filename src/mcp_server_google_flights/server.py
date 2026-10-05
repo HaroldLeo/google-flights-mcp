@@ -458,6 +458,16 @@ def convert_seat_type_to_serpapi(seat_type: str) -> int:
     return mapping.get(seat_type.lower(), 1)
 
 
+def to_serpapi_stops(max_stops: Optional[int]) -> Optional[int]:
+    """Convert a 0/1/2 max-stops value to SerpApi `stops` (1=nonstop, 2=<=1 stop, 3=<=2 stops).
+
+    Returns None (SerpApi default: any number of stops) for values outside 0-2.
+    """
+    if max_stops is None or not 0 <= max_stops <= 2:
+        return None
+    return max_stops + 1
+
+
 def get_flights_from_serpapi(
     origin: str,
     destination: str,
@@ -2077,8 +2087,9 @@ async def search_flights_by_airline(
         airlines: List of airline codes and/or alliance names.
                  - Airline codes: ["UA"], ["UA", "AA", "DL"] (2-letter IATA codes)
                  - Alliance: ["STAR_ALLIANCE"], ["SKYTEAM"], ["ONEWORLD"] (expands to member airlines)
-                 Codes outside the built-in name table are filtered via SerpApi when SERPAPI_API_KEY
-                 is set; otherwise they are ignored (and an error is returned if none are usable).
+                 Codes outside the built-in name table are filtered via SerpApi on one-way searches
+                 when SERPAPI_API_KEY is set; otherwise they are ignored (and an error is returned
+                 if none are usable).
         is_round_trip: If True, search round-trip flights (default: False).
         return_date: Return date for round-trips (YYYY-MM-DD format).
         adults: Number of adult passengers (default: 1).
@@ -2101,12 +2112,15 @@ async def search_flights_by_airline(
 
         target_airline_names, unrecognized_airlines = expand_airline_filter(airlines_list)
         unmapped_codes = [a for a in unrecognized_airlines if is_iata_airline_code(normalize_airline_key(a))]
-        if not target_airline_names and not (unmapped_codes and SERPAPI_ENABLED):
+        # The shared SerpApi round-trip path drops the route when following departure tokens,
+        # so the SerpApi airline filter is limited to one-way searches.
+        use_serpapi_filter = bool(unmapped_codes) and SERPAPI_ENABLED and not is_round_trip
+        if not target_airline_names and not use_serpapi_filter:
             return json.dumps({"error": {
                 "message": (
                     f"No airline-name mapping for {unrecognized_airlines}. Google Flights scraping can only "
                     f"filter by {sorted(AIRLINE_CODE_TO_NAME)} or an alliance from {sorted(ALLIANCE_TO_CODES)}. "
-                    "Other IATA codes need the SerpApi fallback (set SERPAPI_API_KEY)."
+                    "Other IATA codes need the SerpApi fallback (set SERPAPI_API_KEY) and a one-way search."
                 ),
                 "type": "ValueError"
             }})
@@ -2136,7 +2150,7 @@ async def search_flights_by_airline(
             ]
             trip_type = "one-way"
 
-        if unmapped_codes and SERPAPI_ENABLED:
+        if use_serpapi_filter:
             # fast-flights results only carry airline display names, so codes without a
             # name mapping can only be filtered server-side by SerpApi's include_airlines.
             log_info(TOOL, f"No airline-name mapping for {unmapped_codes}; using SerpApi airline filter")
@@ -2146,16 +2160,18 @@ async def search_flights_by_airline(
             ]
             serpapi_output = try_serpapi_fallback(
                 TOOL, origin, destination, date,
-                return_date=return_date if is_round_trip else None,
                 adults=adults,
                 seat_type=seat_type,
-                max_stops=max_stops,
+                max_stops=to_serpapi_stops(max_stops),
                 airlines=serpapi_airlines,
                 return_cheapest_only=return_cheapest_only,
                 max_results=max_results,
             )
             if serpapi_output:
-                return serpapi_output
+                serpapi_data = json.loads(serpapi_output)
+                if "cheapest_flight" in serpapi_data:
+                    serpapi_data["flights"] = serpapi_data.pop("cheapest_flight")
+                return json.dumps(serpapi_data, indent=2)
             if not target_airline_names:
                 return json.dumps({"error": {
                     "message": f"SerpApi airline search returned no results for {serpapi_airlines}",

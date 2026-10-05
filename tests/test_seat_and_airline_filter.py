@@ -166,4 +166,39 @@ def test_unmapped_codes_use_serpapi_airline_filter_when_enabled():
     assert output["data_source"] == "SerpApi (fallback)"
     assert serpapi.call_args.kwargs["airlines"] == ["XX", "STAR_ALLIANCE"]
     assert serpapi.call_args.kwargs["seat_type"] == "premium_economy"
+    assert serpapi.call_args.kwargs["max_stops"] == 3
     fast_flights.assert_not_called()
+
+
+@pytest.mark.parametrize("max_stops, serpapi_stops", [(0, 1), (1, 2), (2, 3), (5, None)])
+def test_serpapi_airline_filter_translates_max_stops(max_stops, serpapi_stops):
+    serpapi_output = json.dumps({"flights": [], "data_source": "SerpApi (fallback)"})
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "try_serpapi_fallback", return_value=serpapi_output) as serpapi:
+        _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", ["XX"], max_stops=max_stops))
+    assert serpapi.call_args.kwargs["max_stops"] == serpapi_stops
+
+
+def test_serpapi_airline_filter_keeps_flights_key_for_cheapest_only():
+    serpapi_output = json.dumps({"cheapest_flight": [{"price": 120}], "data_source": "SerpApi (fallback)"})
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "try_serpapi_fallback", return_value=serpapi_output):
+        output = _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", ["XX"],
+                                                       return_cheapest_only=True))
+    assert output["flights"] == [{"price": 120}]
+    assert "cheapest_flight" not in output
+
+
+def test_round_trip_does_not_route_unmapped_codes_to_serpapi():
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "try_serpapi_fallback") as serpapi, \
+         patch.object(server, "get_flights", side_effect=_fake_get_flights(FLIGHTS)) as fast_flights:
+        only_unmapped = _run(server.search_flights_by_airline(
+            "SFO", "JFK", "2026-12-01", ["XX"], is_round_trip=True, return_date="2026-12-08"))
+        mixed = _run(server.search_flights_by_airline(
+            "SFO", "JFK", "2026-12-01", ["UA", "XX"], is_round_trip=True, return_date="2026-12-08"))
+    serpapi.assert_not_called()
+    assert only_unmapped["error"]["type"] == "ValueError"
+    assert fast_flights.call_count == 1
+    assert [f["airlines"] for f in mixed["flights"]] == ["United, Lufthansa"]
+    assert mixed["ignored_airlines"] == ["XX"]
