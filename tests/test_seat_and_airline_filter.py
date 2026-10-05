@@ -217,6 +217,115 @@ def test_serpapi_airline_filter_returns_airline_tool_schema():
     assert "note" not in serpapi_path
 
 
+def _serp_offer(price, duration=330):
+    return {
+        "flights": [
+            {
+                "departure_airport": {
+                    "id": "SFO",
+                    "name": "San Francisco",
+                    "time": "2026-12-01 08:15",
+                },
+                "arrival_airport": {
+                    "id": "JFK",
+                    "name": "New York",
+                    "time": "2026-12-01 16:45",
+                },
+                "duration": duration,
+                "airline": "United",
+                "flight_number": "UA 100",
+            }
+        ],
+        "price": price,
+        "type": "Round trip",
+        "total_duration": duration,
+    }
+
+
+def _recording_search(captured, payload):
+    class RecordingSearch:
+        def __init__(self, params):
+            captured.append(params)
+
+        def get_dict(self):
+            return payload
+
+    return RecordingSearch
+
+
+@pytest.mark.parametrize("exc", [server.FlightsNotFound("missing"), RuntimeError("scraper down")])
+@pytest.mark.parametrize("max_stops, serpapi_stops", [(0, 1), (1, 2), (2, 3)])
+def test_round_trip_fallback_translates_stops_and_keeps_scraper_shape(exc, max_stops, serpapi_stops):
+    captured = []
+    payload = {"best_flights": [_serp_offer(480), _serp_offer(210, duration=90)]}
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "GoogleSearch", _recording_search(captured, payload), create=True), \
+         patch.object(server, "get_flights", side_effect=exc):
+        output = _run(server.search_round_trip_flights(
+            "SFO", "JFK", "2026-12-01", "2026-12-08",
+            max_stops=max_stops,
+            return_cheapest_only=True,
+        ))
+
+    assert captured[0]["stops"] == serpapi_stops
+    assert captured[0]["type"] == 1
+    assert captured[0]["outbound_date"] == "2026-12-01"
+    assert captured[0]["return_date"] == "2026-12-08"
+    assert len(output["flights"]) == 1
+    assert output["flights"][0]["price"] == 210
+    assert output["flights"][0]["segments"][0]["duration"] == "1h 30m"
+    assert "cheapest_flight" not in output
+    assert output["booking_url"] == server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01", return_date="2026-12-08", seat="economy"
+    )
+    assert output["search_parameters"]["departure_date"] == "2026-12-01"
+    assert output["search_parameters"]["return_date"] == "2026-12-08"
+    assert "date" not in output["search_parameters"]
+    assert output["data_source"] == "SerpApi (fallback)"
+
+
+def test_one_way_fallback_omits_stops_and_uses_date_key():
+    captured = []
+    payload = {"best_flights": [_serp_offer(150)]}
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "GoogleSearch", _recording_search(captured, payload), create=True), \
+         patch.object(server, "get_flights", side_effect=server.FlightsNotFound("missing")):
+        output = _run(server.search_one_way_flights(
+            "SFO", "JFK", "2026-12-01", return_cheapest_only=True
+        ))
+
+    assert "stops" not in captured[0]
+    assert captured[0]["type"] == 2
+    assert output["search_parameters"]["date"] == "2026-12-01"
+    assert "departure_date" not in output["search_parameters"]
+    assert "return_date" not in output["search_parameters"]
+    assert output["flights"][0]["price"] == 150
+    assert "cheapest_flight" not in output
+    assert output["booking_url"] == server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01", seat="economy"
+    )
+
+
+@pytest.mark.parametrize("seat_type", ["premium-economy", "premium_economy"])
+def test_round_trip_fallback_maps_premium_economy_travel_class(seat_type):
+    captured = []
+    payload = {"best_flights": [_serp_offer(300)]}
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "GoogleSearch", _recording_search(captured, payload), create=True), \
+         patch.object(server, "get_flights", side_effect=server.FlightsNotFound("missing")):
+        output = _run(server.search_round_trip_flights(
+            "SFO", "JFK", "2026-12-01", "2026-12-08",
+            seat_type=seat_type,
+            max_stops=0,
+            return_cheapest_only=True,
+        ))
+
+    assert captured[0]["travel_class"] == 2
+    assert captured[0]["stops"] == 1
+    assert "flights" in output
+    assert "booking_url" in output
+
+
 def test_round_trip_does_not_route_unmapped_codes_to_serpapi():
     with patch.object(server, "SERPAPI_ENABLED", True), \
          patch.object(server, "try_serpapi_fallback") as serpapi, \

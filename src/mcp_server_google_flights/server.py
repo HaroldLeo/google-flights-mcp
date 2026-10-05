@@ -561,18 +561,19 @@ def convert_seat_type_to_serpapi(seat_type: str) -> int:
     """Convert our seat_type string to SerpApi travel_class number.
 
     Args:
-        seat_type: One of "economy", "premium_economy", "business", "first"
+        seat_type: One of "economy", "premium_economy"/"premium-economy",
+            "business", "first". Underscores and hyphens are accepted.
 
     Returns:
         SerpApi class number: 1=Economy, 2=Premium, 3=Business, 4=First
     """
     mapping = {
         "economy": 1,
-        "premium_economy": 2,
+        "premium-economy": 2,
         "business": 3,
-        "first": 4
+        "first": 4,
     }
-    return mapping.get(seat_type.lower(), 1)
+    return mapping.get(normalize_seat_type(seat_type), 1)
 
 
 def to_serpapi_stops(max_stops: Optional[int]) -> Optional[int]:
@@ -610,7 +611,7 @@ def get_flights_from_serpapi(
         infants_in_seat: Number of infants with seat (<2 years)
         infants_on_lap: Number of lap infants (<2 years)
         seat_type: Cabin class
-        max_stops: Maximum number of stops (0, 1, or 2)
+        max_stops: SerpApi `stops` code from to_serpapi_stops (1, 2, or 3), or None
         airlines: List of airline codes to filter by
 
     Returns:
@@ -698,7 +699,7 @@ def normalize_serpapi_flight(flight_data: Dict, is_best: bool = False) -> Dict:
                 },
                 "departure": segment.get("departure_airport", {}).get("time"),
                 "arrival": segment.get("arrival_airport", {}).get("time"),
-                "duration": f"{segment.get('duration', 0)}m",
+                "duration": format_duration(segment.get("duration", 0)),
                 "plane_type": segment.get("airplane"),
                 "airline": segment.get("airline"),
                 "flight_number": segment.get("flight_number"),
@@ -905,7 +906,8 @@ def try_serpapi_fallback(
 ) -> Optional[str]:
     """Try to fetch flights using SerpApi as a fallback.
 
-    Returns JSON string if successful, None if failed.
+    ``max_stops`` is a SerpApi ``stops`` code (see ``to_serpapi_stops``), not the
+    tool's 0/1/2 value. Returns JSON string if successful, None if failed.
     """
     if not SERPAPI_ENABLED:
         return None
@@ -973,32 +975,49 @@ def try_serpapi_fallback(
                     # One-way flight
                     flights = outbound_flights
 
-                # Process based on return_cheapest_only
+                # Same result key as the scraper, including cheapest-only.
                 if return_cheapest_only and len(flights) > 0:
                     cheapest_flight = min(flights, key=lambda f: parse_price(f.get("price")))
                     processed_flights = [cheapest_flight]
-                    result_key = "cheapest_flight"
                 else:
                     flights_to_process = flights[:max_results] if max_results > 0 else flights
                     processed_flights = flights_to_process
-                    result_key = "flights"
 
-                output_data = {
-                    "search_parameters": {
+                # One-way scraper responses use "date"; round-trips use departure/return.
+                if return_date:
+                    search_parameters = {
                         "origin": origin,
                         "destination": destination,
                         "departure_date": departure_date,
                         "return_date": return_date,
-                        "adults": adults,
-                        "children": children,
-                        "infants_in_seat": infants_in_seat,
-                        "infants_on_lap": infants_on_lap,
-                        "seat_type": seat_type,
-                        "return_cheapest_only": return_cheapest_only
-                    },
-                    result_key: processed_flights,
+                    }
+                else:
+                    search_parameters = {
+                        "origin": origin,
+                        "destination": destination,
+                        "date": departure_date,
+                    }
+                search_parameters.update({
+                    "adults": adults,
+                    "children": children,
+                    "infants_in_seat": infants_in_seat,
+                    "infants_on_lap": infants_on_lap,
+                    "seat_type": seat_type,
+                    "return_cheapest_only": return_cheapest_only,
+                })
+
+                output_data = {
+                    "search_parameters": search_parameters,
+                    "flights": processed_flights,
+                    "booking_url": _make_google_flights_url(
+                        origin,
+                        destination,
+                        departure_date,
+                        return_date=return_date,
+                        seat=seat_type,
+                    ),
                     "data_source": "SerpApi (fallback)",
-                    "note": "Results from SerpApi due to fast-flights error"
+                    "note": "Results from SerpApi due to fast-flights error",
                 }
 
                 # Add note about round-trip processing
@@ -1865,7 +1884,7 @@ async def search_round_trip_flights(
             infants_in_seat=infants_in_seat,
             infants_on_lap=infants_on_lap,
             seat_type=seat_type,
-            max_stops=max_stops,
+            max_stops=to_serpapi_stops(max_stops),
             return_cheapest_only=return_cheapest_only,
             max_results=max_results
         )
@@ -1912,7 +1931,7 @@ async def search_round_trip_flights(
             infants_in_seat=infants_in_seat,
             infants_on_lap=infants_on_lap,
             seat_type=seat_type,
-            max_stops=max_stops,
+            max_stops=to_serpapi_stops(max_stops),
             return_cheapest_only=return_cheapest_only,
             max_results=max_results
         )
