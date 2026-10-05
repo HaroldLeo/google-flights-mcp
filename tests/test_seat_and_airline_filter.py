@@ -98,6 +98,7 @@ FLIGHTS = [
     _flight("Delta"),
     _flight("Air India"),
     _flight("Hawaiian"),
+    _flight("ITA Airways"),
 ]
 
 
@@ -112,7 +113,7 @@ def _search_by_airline(airlines):
     (["NH"], ["ANA"]),
     (["AI"], ["Air India"]),
     (["UA", "DL"], ["United, Lufthansa", "Delta"]),
-    (["STAR_ALLIANCE"], ["Air Canada", "ANA", "United, Lufthansa", "Air India"]),
+    (["STAR_ALLIANCE"], ["Air Canada", "ANA", "United, Lufthansa", "Air India", "ITA Airways"]),
     (["SKYTEAM"], ["Delta"]),
     (["oneworld"], ["Qantas", "Alaska", "Hawaiian"]),
 ])

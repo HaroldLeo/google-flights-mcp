@@ -202,8 +202,8 @@ AIRLINE_CODE_TO_NAME = {
 
 ALLIANCE_TO_CODES = {
     "STAR_ALLIANCE": [
-        "A3", "AC", "AI", "AV", "BR", "CA", "CM", "ET", "LH", "LO", "LX", "MS", "NH",
-        "NZ", "OS", "OU", "OZ", "SA", "SN", "SQ", "TG", "TK", "TP", "UA", "ZH",
+        "A3", "AC", "AI", "AV", "AZ", "BR", "CA", "CM", "ET", "LH", "LO", "LX", "MS",
+        "NH", "NZ", "OS", "OU", "OZ", "SA", "SN", "SQ", "TG", "TK", "TP", "UA", "ZH",
     ],
     "SKYTEAM": [
         "AF", "AM", "AR", "CI", "DL", "GA", "KE", "KL", "KQ", "ME", "MF", "MU", "RO",
