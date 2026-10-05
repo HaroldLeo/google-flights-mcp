@@ -152,7 +152,7 @@ The `Dockerfile` and transport switching are already configured — set `MCP_TRA
 
 **No flights found:** Try a different date or route. Google Flights rate-limits scraping — SerpAPI fallback is more reliable.
 
-**Scraping errors:** Retry later, or set `SERPAPI_API_KEY` for automatic fallback.
+**Scraping errors:** Retry later, or set `SERPAPI_API_KEY` for automatic fallback on `search_one_way_flights` and `search_round_trip_flights`. Date-range and airline-filtered searches do not use SerpApi.
 
 **Slow searches:** `search_round_trips_in_date_range` is limited to 30 date combinations to avoid rate limiting. Narrow your date range or use `min_stay_days`/`max_stay_days`.
 

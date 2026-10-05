@@ -73,6 +73,32 @@ def normalize_seat_type(seat_type: str) -> str:
     return (seat_type or "economy").replace("_", "-").lower()
 
 
+def _google_flights_query_url(
+    origin: str,
+    destination: str,
+    departure_date: str,
+    return_date: Optional[str] = None,
+    adults: int = 1,
+    children: int = 0,
+    seat: str = "economy",
+) -> str:
+    flights = [
+        FlightQuery(date=departure_date, from_airport=origin, to_airport=destination)
+    ]
+    if return_date:
+        flights.append(
+            FlightQuery(date=return_date, from_airport=destination, to_airport=origin)
+        )
+    trip = "round-trip" if return_date else "one-way"
+    query = create_query(
+        flights=flights,
+        trip=trip,
+        seat=normalize_seat_type(seat),
+        passengers=Passengers(adults=adults, children=children),
+    )
+    return query.url()
+
+
 def _make_google_flights_url(
     origin: str,
     destination: str,
@@ -83,21 +109,15 @@ def _make_google_flights_url(
     seat: str = "economy",
 ) -> str:
     try:
-        flights = [
-            FlightQuery(date=departure_date, from_airport=origin, to_airport=destination)
-        ]
-        if return_date:
-            flights.append(
-                FlightQuery(date=return_date, from_airport=destination, to_airport=origin)
-            )
-        trip = "round-trip" if return_date else "one-way"
-        query = create_query(
-            flights=flights,
-            trip=trip,
-            seat=normalize_seat_type(seat),
-            passengers=Passengers(adults=adults, children=children),
+        return _google_flights_query_url(
+            origin,
+            destination,
+            departure_date,
+            return_date=return_date,
+            adults=adults,
+            children=children,
+            seat=seat,
         )
-        return query.url()
     except Exception:
         return f"https://www.google.com/travel/flights?q={origin}+to+{destination}"
 
@@ -115,6 +135,12 @@ def log_error(tool_name: str, error_type: str, message: str):
 def log_debug(tool_name: str, key: str, value: Any):
     """Structured debug logging for MCP tools."""
     print(f"[{tool_name}] DEBUG: {key} = {value}", file=sys.stderr)
+
+def cap_results(items, max_results):
+    if max_results > 0:
+        return items[:max_results]
+    return items
+
 
 def _as_datetime(simple_datetime):
     if not simple_datetime:
@@ -643,7 +669,10 @@ def combine_outbound_and_return_flights(
             "departure_time": overall_departure,
             "arrival_time": overall_arrival,
             "total_duration": None,
-            "stops": len(all_segments) - 1 if all_segments else 0,
+            "stops": (
+                max(len(outbound_segments) - 1, 0)
+                + max(len(return_segments) - 1, 0)
+            ),
             "segments": all_segments,
             "outbound_details": outbound_flight,
             "return_details": return_flight,
@@ -1260,8 +1289,8 @@ def reliable_search_strategy() -> str:
 **Why:** Google Flights may not have availability for specific routes/dates
 
 ### Problem: HTTP / scraping failures
-**Solution:** Retry, or set `SERPAPI_API_KEY` for automatic fallback
-**Why:** Google may block or rate-limit scrapers; SerpApi is more consistent
+**Solution:** Retry, or set `SERPAPI_API_KEY` for automatic fallback on `search_one_way_flights` and `search_round_trip_flights`
+**Why:** Google may block or rate-limit scrapers; SerpApi is more consistent. Date-range and airline-filtered searches do not call SerpApi.
 
 ### Problem: Searches Timing Out
 **Try:** Reduce date ranges, especially for search_round_trips_in_date_range
@@ -1273,7 +1302,7 @@ def reliable_search_strategy() -> str:
 
 ## 💡 Pro Tips
 
-1. **Use SerpApi for reliability** - Configure SERPAPI_API_KEY for automatic fallback
+1. **Use SerpApi for reliability** - Configure SERPAPI_API_KEY for automatic fallback on one-way and round-trip searches
 2. **Add `return_cheapest_only=true`** - faster results, less data
 3. **Reduce max_stops** - fewer options = faster searches
 4. **Use compact_mode=true** - save ~40% tokens in responses
@@ -1904,11 +1933,12 @@ async def search_round_trips_in_date_range(
                         "booking_url": date_pair_url
                     })
                 else:
+                    flights_to_process = cap_results(result, max_results)
                     flights_list = [
                         flight_to_dict(
                             f, origin=origin, destination=destination, trip="round-trip"
                         )
-                        for f in result
+                        for f in flights_to_process
                     ]
                     results_data.append({
                         "departure_date": depart_date.strftime('%Y-%m-%d'),
@@ -2218,7 +2248,7 @@ async def generate_google_flights_url(
             passenger_parts.append(f"{children} child{'ren' if children > 1 else ''}")
         passengers_str = " ".join(passenger_parts) if passenger_parts else "1 adult"
 
-        url = _make_google_flights_url(
+        url = _google_flights_query_url(
             origin,
             destination,
             departure_date,

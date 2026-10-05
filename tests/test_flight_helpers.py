@@ -5,9 +5,12 @@ import pytest
 
 from mcp_server_google_flights.server import (
     InvalidDateFormat,
+    _google_flights_query_url,
     _make_google_flights_url,
+    cap_results,
     combine_outbound_and_return_flights,
     flight_to_dict,
+    generate_google_flights_url,
     normalize_seat_type,
     normalize_serpapi_flight,
     parse_iso_date,
@@ -38,6 +41,12 @@ def _flight():
         flights=[_segment("SFO", "DEN"), _segment("DEN", "JFK")],
         carbon=None,
     )
+
+
+def test_cap_results_keeps_first_n():
+    assert cap_results(["a", "b", "c"], 2) == ["a", "b"]
+    assert cap_results(["a", "b", "c"], 0) == ["a", "b", "c"]
+    assert cap_results(["a", "b", "c"], -1) == ["a", "b", "c"]
 
 
 def test_normalize_seat_type_premium_economy():
@@ -184,6 +193,52 @@ def test_combine_round_trip_uses_return_selection_price():
 
     assert combined["price"] == 520
     assert combined["flight_type"] == "Round trip"
+    assert combined["stops"] == 0
+
+
+def test_combine_round_trip_counts_stops_per_leg():
+    outbound = {
+        "price": 450,
+        "airlines": "United",
+        "flight_type": "Round trip",
+        "segments": [{"segment_number": 1}, {"segment_number": 2}],
+    }
+    returning = {
+        "price": 520,
+        "airlines": "United",
+        "flight_type": "Round trip",
+        "segments": [{"segment_number": 1}],
+    }
+
+    combined = combine_outbound_and_return_flights(outbound, returning)
+
+    assert combined["stops"] == 1
+
+
+def test_google_flights_query_url_rejects_unknown_seat():
+    with pytest.raises(Exception):
+        _google_flights_query_url("SFO", "JFK", "2026-11-02", seat="not-a-cabin")
+
+
+def test_make_google_flights_url_falls_back_on_unknown_seat():
+    url = _make_google_flights_url("SFO", "JFK", "2026-11-02", seat="not-a-cabin")
+
+    assert url == "https://www.google.com/travel/flights?q=SFO+to+JFK"
+
+
+def test_generate_google_flights_url_reports_encoding_failure():
+    import asyncio
+
+    payload = json.loads(
+        asyncio.run(
+            generate_google_flights_url(
+                "SFO", "JFK", "2026-11-02", seat_type="not-a-cabin"
+            )
+        )
+    )
+
+    assert "error" in payload
+    assert payload["error"]["type"] != "success"
 
 
 def test_round_trip_url_includes_tfs_and_tfu():
