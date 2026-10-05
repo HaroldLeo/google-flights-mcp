@@ -182,6 +182,43 @@ def format_duration(minutes):
     else:
         return f"{mins}m"
 
+def _segment_airborne_minutes(segment) -> int:
+    duration = getattr(segment, "duration", 0)
+    return duration if isinstance(duration, int) else 0
+
+
+def _layover_minutes(previous_segment, next_segment) -> int:
+    previous_arrival_airport = getattr(
+        getattr(previous_segment, "to_airport", None), "code", None
+    )
+    next_departure_airport = getattr(
+        getattr(next_segment, "from_airport", None), "code", None
+    )
+    if (
+        not previous_arrival_airport
+        or previous_arrival_airport != next_departure_airport
+    ):
+        return 0
+    arrival = _as_datetime(getattr(previous_segment, "arrival", None))
+    departure = _as_datetime(getattr(next_segment, "departure", None))
+    if not arrival or not departure or departure < arrival:
+        return 0
+    return int((departure - arrival).total_seconds() // 60)
+
+
+def total_duration_minutes(flight_segments) -> int:
+    # Naive first-dep to last-arr is wrong across time zones. Segment durations
+    # are elapsed minutes; layover local times only match at the connection airport.
+    if not flight_segments:
+        return 0
+    total = 0
+    for index, segment in enumerate(flight_segments):
+        total += _segment_airborne_minutes(segment)
+        if index + 1 < len(flight_segments):
+            total += _layover_minutes(segment, flight_segments[index + 1])
+    return total
+
+
 def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=None):
     try:
         price = getattr(flight, "price", None)
@@ -203,25 +240,17 @@ def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=No
 
         overall_departure = None
         overall_arrival = None
-        total_duration_minutes = 0
-
         if flight_segments:
-            first = flight_segments[0]
-            last = flight_segments[-1]
-            overall_departure = format_datetime(getattr(first, "departure", None))
-            overall_arrival = format_datetime(getattr(last, "arrival", None))
-            start = _as_datetime(getattr(first, "departure", None))
-            end = _as_datetime(getattr(last, "arrival", None))
-            if start and end and end >= start:
-                total_duration_minutes = int((end - start).total_seconds() // 60)
-            else:
-                for segment in flight_segments:
-                    duration = getattr(segment, "duration", 0)
-                    if isinstance(duration, int):
-                        total_duration_minutes += duration
+            overall_departure = format_datetime(
+                getattr(flight_segments[0], "departure", None)
+            )
+            overall_arrival = format_datetime(
+                getattr(flight_segments[-1], "arrival", None)
+            )
 
+        duration_minutes = total_duration_minutes(flight_segments)
         total_duration = (
-            format_duration(total_duration_minutes) if total_duration_minutes > 0 else None
+            format_duration(duration_minutes) if duration_minutes > 0 else None
         )
 
         carbon_data = getattr(flight, "carbon", None)
@@ -508,8 +537,7 @@ def normalize_serpapi_flight(flight_data: Dict, is_best: bool = False) -> Dict:
                 "difference_percent": carbon_data.get("difference_percent"),
             }
 
-        # Build result
-        return {
+        result = {
             "price": price,
             "airlines": airline_names or None,
             "flight_type": flight_data.get("type"),
@@ -523,6 +551,10 @@ def normalize_serpapi_flight(flight_data: Dict, is_best: bool = False) -> Dict:
             "source": "SerpApi",
             "is_best_flight": is_best,
         }
+        departure_token = flight_data.get("departure_token")
+        if departure_token:
+            result["departure_token"] = departure_token
+        return result
 
     except Exception as e:
         log_error("normalize_serpapi_flight", type(e).__name__, str(e))
@@ -574,31 +606,35 @@ def combine_outbound_and_return_flights(
         Combined round-trip flight dict
     """
     try:
-        # Calculate total price
-        outbound_price = outbound_flight.get("price", 0)
-        return_price = return_flight.get("price", 0)
+        # SerpApi return selections already carry the full round-trip ticket price.
+        return_price = parse_price(return_flight.get("price"))
+        outbound_price = parse_price(outbound_flight.get("price"))
+        return_type = str(return_flight.get("flight_type") or "").lower()
+        if return_type == "round trip" and math.isfinite(return_price):
+            total_price = int(return_price)
+        elif math.isfinite(return_price) and math.isfinite(outbound_price):
+            total_price = int(outbound_price + return_price)
+        elif math.isfinite(return_price):
+            total_price = int(return_price)
+        elif math.isfinite(outbound_price):
+            total_price = int(outbound_price)
+        else:
+            total_price = None
 
-        # Parse prices (remove $ and convert to int)
-        if isinstance(outbound_price, str):
-            outbound_price = int(outbound_price.replace("$", "").replace(",", ""))
-        if isinstance(return_price, str):
-            return_price = int(return_price.replace("$", "").replace(",", ""))
-
-        total_price = outbound_price + return_price
-
-        # Combine segments
         outbound_segments = outbound_flight.get("segments", [])
         return_segments = return_flight.get("segments", [])
         all_segments = outbound_segments + return_segments
 
-        # Get overall times
         overall_departure = outbound_flight.get("departure_time")
         overall_arrival = return_flight.get("arrival_time")
 
-        # Combine airlines
         outbound_airlines = outbound_flight.get("airlines", "")
         return_airlines = return_flight.get("airlines", "")
-        all_airlines = f"{outbound_airlines}, {return_airlines}" if return_airlines != outbound_airlines else outbound_airlines
+        all_airlines = (
+            f"{outbound_airlines}, {return_airlines}"
+            if return_airlines != outbound_airlines
+            else outbound_airlines
+        )
 
         return {
             "price": total_price,
@@ -606,7 +642,7 @@ def combine_outbound_and_return_flights(
             "flight_type": "Round trip",
             "departure_time": overall_departure,
             "arrival_time": overall_arrival,
-            "total_duration": None,  # Would need to calculate including layover time
+            "total_duration": None,
             "stops": len(all_segments) - 1 if all_segments else 0,
             "segments": all_segments,
             "outbound_details": outbound_flight,
@@ -698,35 +734,31 @@ def try_serpapi_fallback(
                 if return_date:
                     log_info(tool_name, "Round-trip detected - fetching return flights...")
                     complete_roundtrips = []
-
-                    # Get departure tokens from outbound flights (limit to avoid excessive API calls)
-                    # Process top 3 best flights to balance completeness vs API cost
                     max_outbound_to_process = min(3, len(outbound_flights))
                     outbound_to_process = outbound_flights[:max_outbound_to_process]
 
                     for idx, outbound in enumerate(outbound_to_process):
-                        # Get departure_token from the raw SerpApi data
-                        # Look for it in best_flights or other_flights arrays
-                        departure_token = None
-                        for flight in serpapi_result.get("best_flights", []) + serpapi_result.get("other_flights", []):
-                            # Match by price to find the corresponding raw flight
-                            if flight.get("price") == outbound.get("price"):
-                                departure_token = flight.get("departure_token")
-                                break
-
+                        departure_token = outbound.get("departure_token")
                         if not departure_token:
-                            log_info(tool_name, f"No departure_token for outbound flight #{idx+1}, skipping")
+                            log_info(
+                                tool_name,
+                                f"No departure_token for outbound flight #{idx+1}, skipping",
+                            )
                             continue
 
-                        log_info(tool_name, f"Fetching return flights for outbound option #{idx+1}")
+                        log_info(
+                            tool_name,
+                            f"Fetching return flights for outbound option #{idx+1}",
+                        )
                         return_result = get_return_flights_from_serpapi(departure_token)
 
                         if return_result:
                             return_flights = convert_serpapi_response(return_result)
                             if return_flights:
-                                # Combine this outbound with each return option (take top 2 returns)
                                 for return_flight in return_flights[:2]:
-                                    combined = combine_outbound_and_return_flights(outbound, return_flight)
+                                    combined = combine_outbound_and_return_flights(
+                                        outbound, return_flight
+                                    )
                                     complete_roundtrips.append(combined)
 
                     if complete_roundtrips:

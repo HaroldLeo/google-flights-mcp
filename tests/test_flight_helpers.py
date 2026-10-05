@@ -6,14 +6,16 @@ import pytest
 from mcp_server_google_flights.server import (
     InvalidDateFormat,
     _make_google_flights_url,
+    combine_outbound_and_return_flights,
     flight_to_dict,
     normalize_seat_type,
+    normalize_serpapi_flight,
     parse_iso_date,
     parse_price,
 )
 
 
-def _segment(origin_code, destination_code):
+def _segment(origin_code, destination_code, duration=205):
     departure = SimpleNamespace(date=(2026, 11, 2), time=(8, 15))
     arrival = SimpleNamespace(date=(2026, 11, 2), time=(11, 40))
     return SimpleNamespace(
@@ -23,7 +25,7 @@ def _segment(origin_code, destination_code):
         ),
         departure=departure,
         arrival=arrival,
-        duration=205,
+        duration=duration,
         plane_type="737",
     )
 
@@ -103,8 +105,8 @@ def test_flight_to_dict_does_not_use_carrier_as_flight_type():
 
 
 def test_flight_to_dict_duration_includes_layover():
-    first = _segment("SFO", "DEN")
-    second = _segment("DEN", "JFK")
+    first = _segment("SFO", "DEN", duration=205)
+    second = _segment("DEN", "JFK", duration=320)
     second.departure = SimpleNamespace(date=(2026, 11, 2), time=(14, 40))
     second.arrival = SimpleNamespace(date=(2026, 11, 2), time=(20, 0))
     flight = _flight()
@@ -115,6 +117,73 @@ def test_flight_to_dict_duration_includes_layover():
 
     assert payload["total_duration"] == "11h 45m"
     assert compact["duration"] == "11h 45m"
+
+
+def test_flight_to_dict_duration_ignores_timezone_skewed_wall_clock():
+    segment = _segment("SFO", "JFK", duration=330)
+    segment.departure = SimpleNamespace(date=(2026, 11, 2), time=(8, 0))
+    segment.arrival = SimpleNamespace(date=(2026, 11, 2), time=(16, 30))
+    flight = _flight()
+    flight.flights = [segment]
+
+    payload = flight_to_dict(flight, trip="one-way")
+
+    assert payload["total_duration"] == "5h 30m"
+
+
+def test_normalize_serpapi_flight_keeps_departure_token():
+    payload = normalize_serpapi_flight(
+        {
+            "flights": [
+                {
+                    "departure_airport": {
+                        "id": "SFO",
+                        "name": "San Francisco",
+                        "time": "2026-11-02 08:15",
+                    },
+                    "arrival_airport": {
+                        "id": "JFK",
+                        "name": "New York",
+                        "time": "2026-11-02 16:45",
+                    },
+                    "duration": 330,
+                    "airline": "United",
+                    "flight_number": "UA 100",
+                }
+            ],
+            "price": 450,
+            "type": "Round trip",
+            "total_duration": 330,
+            "departure_token": "token-abc",
+        }
+    )
+
+    assert payload["departure_token"] == "token-abc"
+
+
+def test_combine_round_trip_uses_return_selection_price():
+    outbound = {
+        "price": 450,
+        "airlines": "United",
+        "flight_type": "Round trip",
+        "departure_time": "2026-11-02 08:15",
+        "arrival_time": "2026-11-02 16:45",
+        "segments": [{"segment_number": 1}],
+        "is_best_flight": True,
+    }
+    returning = {
+        "price": 520,
+        "airlines": "United",
+        "flight_type": "Round trip",
+        "departure_time": "2026-11-09 10:00",
+        "arrival_time": "2026-11-09 13:00",
+        "segments": [{"segment_number": 1}],
+    }
+
+    combined = combine_outbound_and_return_flights(outbound, returning)
+
+    assert combined["price"] == 520
+    assert combined["flight_type"] == "Round trip"
 
 
 def test_round_trip_url_includes_tfs_and_tfu():
