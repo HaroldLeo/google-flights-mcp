@@ -6,6 +6,7 @@ import datetime
 import math
 import sys
 import os
+import re
 from typing import Any, Optional, Dict, List
 
 try:
@@ -120,6 +121,167 @@ def _make_google_flights_url(
         )
     except (KeyError, TypeError, ValueError):
         return f"https://www.google.com/travel/flights?q={origin}+to+{destination}"
+
+
+# --- Airline Code Mappings ---
+# IATA airline codes to full names used by fast-flights
+AIRLINE_CODE_TO_NAME = {
+    # Major US carriers
+    "AA": ["American", "American Airlines"],
+    "DL": ["Delta", "Delta Air Lines"],
+    "UA": ["United", "United Airlines"],
+    "WN": ["Southwest", "Southwest Airlines"],
+    "AS": ["Alaska", "Alaska Airlines"],
+    "B6": ["JetBlue", "JetBlue Airways"],
+    "F9": ["Frontier", "Frontier Airlines"],
+    "NK": ["Spirit", "Spirit Airlines"],
+    "G4": ["Allegiant", "Allegiant Air"],
+    "SY": ["Sun Country", "Sun Country Airlines"],
+    "HA": ["Hawaiian", "Hawaiian Airlines"],
+    "MX": ["Breeze", "Breeze Airways"],
+
+    # Major International carriers
+    "AC": ["Air Canada"],
+    "AM": ["Aeroméxico", "Aeromexico"],
+    "BA": ["British Airways"],
+    "AF": ["Air France"],
+    "KL": ["KLM", "KLM Royal Dutch Airlines"],
+    "LH": ["Lufthansa"],
+    "EK": ["Emirates"],
+    "QR": ["Qatar Airways"],
+    "SQ": ["Singapore Airlines"],
+    "CX": ["Cathay Pacific"],
+    "NH": ["ANA", "All Nippon Airways"],
+    "JL": ["JAL", "Japan Airlines"],
+    "QF": ["Qantas"],
+    "EY": ["Etihad", "Etihad Airways"],
+    "TK": ["Turkish Airlines"],
+    "VS": ["Virgin Atlantic"],
+    "AZ": ["ITA Airways", "Alitalia"],
+    "IB": ["Iberia"],
+    "LX": ["Swiss", "Swiss International Air Lines"],
+    "OS": ["Austrian", "Austrian Airlines"],
+    "SN": ["Brussels Airlines"],
+    "SK": ["SAS", "Scandinavian Airlines"],
+    "AY": ["Finnair"],
+    "TP": ["TAP", "TAP Air Portugal"],
+    "EI": ["Aer Lingus"],
+    "WS": ["WestJet"],
+    "CM": ["Copa Airlines"],
+    "AV": ["Avianca"],
+    "LA": ["LATAM", "LATAM Airlines"],
+    "AI": ["Air India"],
+    "NZ": ["Air New Zealand"],
+    "A3": ["Aegean", "Aegean Airlines"],
+    "OU": ["Croatia Airlines"],
+    "MS": ["EgyptAir"],
+    "ET": ["Ethiopian", "Ethiopian Airlines"],
+    "LO": ["LOT", "LOT Polish Airlines"],
+    "SA": ["South African Airways"],
+    "AR": ["Aerolíneas Argentinas", "Aerolineas Argentinas"],
+    "UX": ["Air Europa"],
+    "KQ": ["Kenya Airways"],
+    "ME": ["Middle East Airlines", "MEA"],
+    "SV": ["Saudia"],
+    "RO": ["TAROM"],
+    "FJ": ["Fiji Airways"],
+    "WY": ["Oman Air"],
+    "AT": ["Royal Air Maroc"],
+    "RJ": ["Royal Jordanian"],
+    "UL": ["SriLankan", "SriLankan Airlines"],
+    "FI": ["Icelandair"],
+    "VA": ["Virgin Australia"],
+    "PD": ["Porter", "Porter Airlines"],
+    "TS": ["Air Transat"],
+    "DE": ["Condor"],
+
+    # Asian carriers
+    "KE": ["Korean Air"],
+    "OZ": ["Asiana"],
+    "BR": ["EVA Air"],
+    "CI": ["China Airlines"],
+    "CA": ["Air China"],
+    "CZ": ["China Southern"],
+    "MU": ["China Eastern"],
+    "TG": ["Thai Airways"],
+    "VN": ["Vietnam Airlines"],
+    "MH": ["Malaysia Airlines"],
+    "GA": ["Garuda Indonesia"],
+    "PR": ["Philippine Airlines"],
+    "ZH": ["Shenzhen Airlines"],
+    "MF": ["XiamenAir", "Xiamen Airlines"],
+
+    # Budget carriers
+    "FR": ["Ryanair"],
+    "U2": ["easyJet"],
+    "VY": ["Vueling"],
+    "W6": ["Wizz Air"],
+    "TR": ["Scoot"],
+    "AK": ["AirAsia"],
+    "DY": ["Norwegian"],
+    "EW": ["Eurowings"],
+    "PC": ["Pegasus", "Pegasus Airlines"],
+    "FZ": ["flydubai"],
+    "G9": ["Air Arabia"],
+    "6E": ["IndiGo"],
+    "JQ": ["Jetstar"],
+    "5J": ["Cebu Pacific"],
+    "Y4": ["Volaris"],
+}
+
+ALLIANCE_TO_CODES = {
+    "STAR_ALLIANCE": [
+        "A3", "AC", "AI", "AV", "AZ", "BR", "CA", "CM", "ET", "LH", "LO", "LX", "MS",
+        "NH", "NZ", "OS", "OU", "OZ", "SA", "SN", "SQ", "TG", "TK", "TP", "UA", "ZH",
+    ],
+    "SKYTEAM": [
+        "AF", "AM", "AR", "CI", "DL", "GA", "KE", "KL", "KQ", "ME", "MF", "MU", "RO",
+        "SK", "SV", "UX", "VN", "VS",
+    ],
+    "ONEWORLD": [
+        "AA", "AS", "AT", "AY", "BA", "CX", "FJ", "HA", "IB", "JL", "MH", "QF", "QR",
+        "RJ", "UL", "WY",
+    ],
+}
+
+
+def normalize_airline_key(raw: str) -> str:
+    """Upper-case an airline input; alliance spellings like "Star Alliance" become "STAR_ALLIANCE"."""
+    key = raw.strip().upper()
+    alliance_key = key.replace(" ", "_").replace("-", "_")
+    return alliance_key if alliance_key in ALLIANCE_TO_CODES else key
+
+
+def is_iata_airline_code(key: str) -> bool:
+    return re.fullmatch(r"[A-Z0-9]{2}", key) is not None
+
+
+def expand_airline_filter(airlines: List[str]) -> tuple[set, List[str]]:
+    """Expand airline codes and alliance names to the airline names fast-flights reports.
+
+    Returns:
+        (set of upper-cased airline names, list of inputs with no name mapping)
+    """
+    names = set()
+    unrecognized = []
+    for raw in airlines:
+        key = normalize_airline_key(raw)
+        if key in ALLIANCE_TO_CODES:
+            codes = ALLIANCE_TO_CODES[key]
+        elif key in AIRLINE_CODE_TO_NAME:
+            codes = [key]
+        else:
+            unrecognized.append(raw)
+            continue
+        for code in codes:
+            names.update(name.upper() for name in AIRLINE_CODE_TO_NAME[code])
+    return names, unrecognized
+
+
+def flight_matches_airlines(flight_airline: str, target_names: set) -> bool:
+    """Exact-match each carrier; Google Flights lists multi-carrier itineraries as "United, Lufthansa"."""
+    carriers = {carrier.strip().upper() for carrier in flight_airline.split(",")}
+    return not carriers.isdisjoint(target_names)
 
 
 # --- Helper functions ---
@@ -411,6 +573,16 @@ def convert_seat_type_to_serpapi(seat_type: str) -> int:
         "first": 4
     }
     return mapping.get(seat_type.lower(), 1)
+
+
+def to_serpapi_stops(max_stops: Optional[int]) -> Optional[int]:
+    """Convert a 0/1/2 max-stops value to SerpApi `stops` (1=nonstop, 2=<=1 stop, 3=<=2 stops).
+
+    Returns None (SerpApi default: any number of stops) for values outside 0-2.
+    """
+    if max_stops is None or not 0 <= max_stops <= 2:
+        return None
+    return max_stops + 1
 
 
 def get_flights_from_serpapi(
@@ -1916,6 +2088,7 @@ async def search_round_trips_in_date_range(
                 origin, destination,
                 depart_date.strftime('%Y-%m-%d'),
                 return_date=return_date.strftime('%Y-%m-%d'),
+                seat=seat_type,
             )
 
             if result:
@@ -2024,9 +2197,12 @@ async def search_flights_by_airline(
         origin: Origin airport code (e.g., "SFO").
         destination: Destination airport code (e.g., "JFK").
         date: Departure date (YYYY-MM-DD format).
-        airlines: List of airline codes or a single alliance name.
+        airlines: List of airline codes and/or alliance names.
                  - Airline codes: ["UA"], ["UA", "AA", "DL"] (2-letter IATA codes)
-                 - Alliance: ["STAR_ALLIANCE"], ["SKYTEAM"], ["ONEWORLD"]
+                 - Alliance: ["STAR_ALLIANCE"], ["SKYTEAM"], ["ONEWORLD"] (expands to member airlines)
+                 Codes outside the built-in name table are filtered via SerpApi on one-way searches
+                 when SERPAPI_API_KEY is set; otherwise they are ignored (and an error is returned
+                 if none are usable).
         is_round_trip: If True, search round-trip flights (default: False).
         return_date: Return date for round-trips (YYYY-MM-DD format).
         adults: Number of adult passengers (default: 1).
@@ -2046,6 +2222,21 @@ async def search_flights_by_airline(
 
         if not airlines_list:
             return json.dumps({"error": {"message": "airlines parameter cannot be empty", "type": "ValueError"}})
+
+        target_airline_names, unrecognized_airlines = expand_airline_filter(airlines_list)
+        unmapped_codes = [a for a in unrecognized_airlines if is_iata_airline_code(normalize_airline_key(a))]
+        # The shared SerpApi round-trip path drops the route when following departure tokens,
+        # so the SerpApi airline filter is limited to one-way searches.
+        use_serpapi_filter = bool(unmapped_codes) and SERPAPI_ENABLED and not is_round_trip
+        if not target_airline_names and not use_serpapi_filter:
+            return json.dumps({"error": {
+                "message": (
+                    f"No airline-name mapping for {unrecognized_airlines}. Google Flights scraping can only "
+                    f"filter by {sorted(AIRLINE_CODE_TO_NAME)} or an alliance from {sorted(ALLIANCE_TO_CODES)}. "
+                    "Other IATA codes need the SerpApi fallback (set SERPAPI_API_KEY) and a one-way search."
+                ),
+                "type": "ValueError"
+            }})
 
         trip_desc = f"{'round-trip' if is_round_trip else 'one-way'}"
         log_info(TOOL, f"{trip_desc.capitalize()} {origin}→{destination} on {airlines_list}")
@@ -2087,6 +2278,63 @@ async def search_flights_by_airline(
             ]
             trip_type = "one-way"
 
+        search_parameters = {
+            "origin": origin,
+            "destination": destination,
+            "date": date,
+            "airlines": airlines_list,
+            "is_round_trip": is_round_trip,
+            "return_date": return_date if is_round_trip else None,
+            "adults": adults,
+            "seat_type": seat_type,
+            "max_stops": max_stops,
+            "return_cheapest_only": return_cheapest_only
+        }
+        google_flights_url = _make_google_flights_url(
+            origin, destination, date,
+            return_date=return_date if is_round_trip else None,
+            seat=seat_type,
+        )
+
+        if use_serpapi_filter:
+            # fast-flights results only carry airline display names, so codes without a
+            # name mapping can only be filtered server-side by SerpApi's include_airlines.
+            log_info(TOOL, f"No airline-name mapping for {unmapped_codes}; using SerpApi airline filter")
+            serpapi_airlines = [
+                key for key in (normalize_airline_key(a) for a in airlines_list)
+                if key in ALLIANCE_TO_CODES or is_iata_airline_code(key)
+            ]
+            serpapi_output = try_serpapi_fallback(
+                TOOL, origin, destination, date,
+                adults=adults,
+                seat_type=seat_type,
+                max_stops=to_serpapi_stops(max_stops),
+                airlines=serpapi_airlines,
+                return_cheapest_only=return_cheapest_only,
+                max_results=max_results,
+            )
+            if serpapi_output:
+                serpapi_data = json.loads(serpapi_output)
+                output_data = {
+                    "search_parameters": search_parameters,
+                    "flights": serpapi_data.get("flights", serpapi_data.get("cheapest_flight", [])),
+                    "booking_url": google_flights_url,
+                    "data_source": serpapi_data.get("data_source"),
+                }
+                if "result_metadata" in serpapi_data:
+                    output_data["result_metadata"] = serpapi_data["result_metadata"]
+                ignored_airlines = [a for a in airlines_list if normalize_airline_key(a) not in serpapi_airlines]
+                if ignored_airlines:
+                    output_data["ignored_airlines"] = ignored_airlines
+                return json.dumps(output_data, indent=2)
+            if not target_airline_names:
+                return json.dumps({"error": {
+                    "message": f"SerpApi airline search returned no results for {serpapi_airlines}",
+                    "type": "RuntimeError"
+                }})
+        if unrecognized_airlines:
+            log_info(TOOL, f"Ignoring airlines with no name mapping: {unrecognized_airlines}")
+
         passengers_info = Passengers(adults=adults)
 
         log_info(TOOL, "Fetching flights from Google Flights (v3, native airline filter)...")
@@ -2099,10 +2347,20 @@ async def search_flights_by_airline(
         )
         result = get_flights(query)
 
-        google_flights_url = _make_google_flights_url(
-            origin, destination, date,
-            return_date=return_date if is_round_trip else None,
-        )
+        if result and target_airline_names:
+            log_info(
+                TOOL,
+                f"Matching {len(result)} scraped flights against airline names: {sorted(target_airline_names)}",
+            )
+            result = [
+                flight
+                for flight in result
+                if flight_matches_airlines(
+                    ", ".join(getattr(flight, "airlines", []) or []),
+                    target_airline_names,
+                )
+            ]
+            log_info(TOOL, f"Found {len(result)} flights matching specified airlines")
 
         if result:
             log_info(TOOL, f"Found {len(result)} flight(s)")
@@ -2133,21 +2391,12 @@ async def search_flights_by_airline(
                 result_key = "flights"
 
             output_data = {
-                "search_parameters": {
-                    "origin": origin,
-                    "destination": destination,
-                    "date": date,
-                    "airlines": airlines_list,
-                    "is_round_trip": is_round_trip,
-                    "return_date": return_date if is_round_trip else None,
-                    "adults": adults,
-                    "seat_type": seat_type,
-                    "max_stops": max_stops,
-                    "return_cheapest_only": return_cheapest_only
-                },
+                "search_parameters": search_parameters,
                 result_key: processed_flights,
                 "booking_url": google_flights_url
             }
+            if unrecognized_airlines:
+                output_data["ignored_airlines"] = unrecognized_airlines
             return json.dumps(output_data, indent=2)
         else:
             return json.dumps({
@@ -2165,6 +2414,7 @@ async def search_flights_by_airline(
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
+            seat=seat_type,
         )
         response_data = {
             "message": "The scraper couldn't find flights for the specified airlines, but you can view results directly on Google Flights.",
@@ -2190,6 +2440,7 @@ async def search_flights_by_airline(
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
+            seat=seat_type,
         )
         response_data = {
             "error": {"message": f"{type(e).__name__}: {error_msg}", "type": type(e).__name__},
