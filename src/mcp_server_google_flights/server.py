@@ -1014,6 +1014,8 @@ def try_serpapi_fallback(
                         destination,
                         departure_date,
                         return_date=return_date,
+                        adults=adults,
+                        children=children,
                         seat=seat_type,
                     ),
                     "data_source": "SerpApi (fallback)",

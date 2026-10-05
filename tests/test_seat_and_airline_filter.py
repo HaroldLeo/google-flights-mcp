@@ -306,6 +306,39 @@ def test_one_way_fallback_omits_stops_and_uses_date_key():
     )
 
 
+def test_fallback_booking_url_keeps_passenger_counts():
+    captured = []
+    payload = {"best_flights": [_serp_offer(210)]}
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "GoogleSearch", _recording_search(captured, payload), create=True), \
+         patch.object(server, "get_flights", side_effect=server.FlightsNotFound("missing")):
+        output = _run(server.search_round_trip_flights(
+            "SFO", "JFK", "2026-12-01", "2026-12-08",
+            adults=2,
+            children=1,
+            return_cheapest_only=True,
+        ))
+
+    expected = server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01",
+        return_date="2026-12-08",
+        adults=2,
+        children=1,
+        seat="economy",
+    )
+    default_party = server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01",
+        return_date="2026-12-08",
+        seat="economy",
+    )
+    assert expected != default_party
+    assert output["booking_url"] == expected
+    assert output["search_parameters"]["adults"] == 2
+    assert output["search_parameters"]["children"] == 1
+    assert captured[0]["adults"] == 2
+    assert captured[0]["children"] == 1
+
+
 @pytest.mark.parametrize("seat_type", ["premium-economy", "premium_economy"])
 def test_round_trip_fallback_maps_premium_economy_travel_class(seat_type):
     captured = []
