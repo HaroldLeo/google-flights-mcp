@@ -6,22 +6,27 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from fast_flights.flights_impl import TFSData
 
 from mcp_server_google_flights import server
 
 
-def _flight(name, price="$100"):
-    return SimpleNamespace(name=name, price=price, is_best=False, departure="10:00 AM",
-                           arrival="6:00 PM", duration="5 hr", stops=0)
+def _flight(name, price=100):
+    carriers = [part.strip() for part in name.split(",")]
+    return SimpleNamespace(
+        price=price,
+        airlines=carriers,
+        type=None,
+        flights=[],
+        carbon=None,
+    )
 
 
 def _fake_get_flights(flights):
-    """Build the real TFS filter so an unsupported seat raises like fast-flights does."""
-    def fake(*, flight_data, trip, passengers, seat, fetch_mode="common", max_stops=None):
-        TFSData.from_interface(flight_data=flight_data, trip=trip, passengers=passengers,
-                               seat=seat, max_stops=max_stops)
-        return SimpleNamespace(flights=list(flights), current_price="typical")
+    """Return v3-shaped flights. Seat is already validated by create_query."""
+
+    def fake(query, /, *, proxy=None, integration=None):
+        return list(flights)
+
     return fake
 
 
@@ -49,7 +54,7 @@ def test_premium_economy_reaches_get_flights_normalized(call):
         output = _run(call())
     assert "error" not in output
     assert mock.call_count >= 1
-    assert all(c.kwargs["seat"] == "premium-economy" for c in mock.call_args_list)
+    assert all(c.args[0].get_seat_type() == "premium-economy" for c in mock.call_args_list)
 
 
 def _booking_urls(output):
