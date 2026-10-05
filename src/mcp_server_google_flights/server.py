@@ -118,7 +118,7 @@ def _make_google_flights_url(
             children=children,
             seat=seat,
         )
-    except Exception:
+    except (KeyError, TypeError, ValueError):
         return f"https://www.google.com/travel/flights?q={origin}+to+{destination}"
 
 
