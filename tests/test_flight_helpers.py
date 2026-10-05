@@ -11,6 +11,7 @@ from mcp_server_google_flights.server import (
     combine_outbound_and_return_flights,
     flight_to_dict,
     generate_google_flights_url,
+    convert_seat_type_to_serpapi,
     normalize_seat_type,
     normalize_serpapi_flight,
     parse_iso_date,
@@ -51,6 +52,14 @@ def test_cap_results_keeps_first_n():
 
 def test_normalize_seat_type_premium_economy():
     assert normalize_seat_type("premium_economy") == "premium-economy"
+
+
+def test_convert_seat_type_to_serpapi_accepts_hyphenated_premium_economy():
+    assert convert_seat_type_to_serpapi("premium-economy") == 2
+    assert convert_seat_type_to_serpapi("premium_economy") == 2
+    assert convert_seat_type_to_serpapi("Business") == 3
+    assert convert_seat_type_to_serpapi("first") == 4
+    assert convert_seat_type_to_serpapi("not-a-cabin") == 1
 
 
 def test_parse_price_literals():
@@ -168,6 +177,8 @@ def test_normalize_serpapi_flight_keeps_departure_token():
     )
 
     assert payload["departure_token"] == "token-abc"
+    assert payload["segments"][0]["duration"] == "5h 30m"
+    assert payload["total_duration"] == "5h 30m"
 
 
 def test_combine_round_trip_uses_return_selection_price():
