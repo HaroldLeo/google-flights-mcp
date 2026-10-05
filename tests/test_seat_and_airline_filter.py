@@ -102,10 +102,10 @@ FLIGHTS = [
 ]
 
 
-def _search_by_airline(airlines):
+def _search_by_airline(airlines, **kwargs):
     with patch.object(server, "SERPAPI_ENABLED", False), \
          patch.object(server, "get_flights", side_effect=_fake_get_flights(FLIGHTS)):
-        return _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", airlines))
+        return _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", airlines, **kwargs))
 
 
 @pytest.mark.parametrize("airlines, expected", [
@@ -188,6 +188,28 @@ def test_serpapi_airline_filter_keeps_flights_key_for_cheapest_only():
                                                        return_cheapest_only=True))
     assert output["flights"] == [{"price": 120}]
     assert "cheapest_flight" not in output
+
+
+def test_serpapi_airline_filter_returns_airline_tool_schema():
+    serpapi_output = json.dumps({
+        "search_parameters": {"origin": "SFO", "destination": "JFK", "departure_date": "2026-12-01"},
+        "flights": [{"price": 120}],
+        "data_source": "SerpApi (fallback)",
+        "note": "Results from SerpApi due to fast-flights error",
+        "result_metadata": {"total_found": 1, "returned": 1, "truncated": False},
+    })
+    args = dict(seat_type="business", max_stops=1)
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "try_serpapi_fallback", return_value=serpapi_output):
+        serpapi_path = _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", ["XX", "Delta"], **args))
+    scraper_path = _search_by_airline(["UA"], **args)
+
+    assert serpapi_path["search_parameters"] == {**scraper_path["search_parameters"], "airlines": ["XX", "Delta"]}
+    assert serpapi_path["booking_url"] == scraper_path["booking_url"]
+    assert serpapi_path["flights"] == [{"price": 120}]
+    assert serpapi_path["result_metadata"]["total_found"] == 1
+    assert serpapi_path["ignored_airlines"] == ["Delta"]
+    assert "note" not in serpapi_path
 
 
 def test_round_trip_does_not_route_unmapped_codes_to_serpapi():

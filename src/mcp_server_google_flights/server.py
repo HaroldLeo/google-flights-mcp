@@ -2150,6 +2150,24 @@ async def search_flights_by_airline(
             ]
             trip_type = "one-way"
 
+        search_parameters = {
+            "origin": origin,
+            "destination": destination,
+            "date": date,
+            "airlines": airlines_list,
+            "is_round_trip": is_round_trip,
+            "return_date": return_date if is_round_trip else None,
+            "adults": adults,
+            "seat_type": seat_type,
+            "max_stops": max_stops,
+            "return_cheapest_only": return_cheapest_only
+        }
+        google_flights_url = _make_google_flights_url(
+            origin, destination, date,
+            return_date=return_date if is_round_trip else None,
+            seat=seat_type,
+        )
+
         if use_serpapi_filter:
             # fast-flights results only carry airline display names, so codes without a
             # name mapping can only be filtered server-side by SerpApi's include_airlines.
@@ -2169,9 +2187,18 @@ async def search_flights_by_airline(
             )
             if serpapi_output:
                 serpapi_data = json.loads(serpapi_output)
-                if "cheapest_flight" in serpapi_data:
-                    serpapi_data["flights"] = serpapi_data.pop("cheapest_flight")
-                return json.dumps(serpapi_data, indent=2)
+                output_data = {
+                    "search_parameters": search_parameters,
+                    "flights": serpapi_data.get("flights", serpapi_data.get("cheapest_flight", [])),
+                    "booking_url": google_flights_url,
+                    "data_source": serpapi_data.get("data_source"),
+                }
+                if "result_metadata" in serpapi_data:
+                    output_data["result_metadata"] = serpapi_data["result_metadata"]
+                ignored_airlines = [a for a in airlines_list if normalize_airline_key(a) not in serpapi_airlines]
+                if ignored_airlines:
+                    output_data["ignored_airlines"] = ignored_airlines
+                return json.dumps(output_data, indent=2)
             if not target_airline_names:
                 return json.dumps({"error": {
                     "message": f"SerpApi airline search returned no results for {serpapi_airlines}",
@@ -2190,12 +2217,6 @@ async def search_flights_by_airline(
             passengers=passengers_info,
             fetch_mode="common",
             max_stops=max_stops
-        )
-
-        google_flights_url = _make_google_flights_url(
-            origin, destination, date,
-            return_date=return_date if is_round_trip else None,
-            seat=seat_type,
         )
 
         if result and result.flights:
@@ -2223,18 +2244,7 @@ async def search_flights_by_airline(
                 result_key = "flights"
 
             output_data = {
-                "search_parameters": {
-                    "origin": origin,
-                    "destination": destination,
-                    "date": date,
-                    "airlines": airlines_list,
-                    "is_round_trip": is_round_trip,
-                    "return_date": return_date if is_round_trip else None,
-                    "adults": adults,
-                    "seat_type": seat_type,
-                    "max_stops": max_stops,
-                    "return_cheapest_only": return_cheapest_only
-                },
+                "search_parameters": search_parameters,
                 result_key: processed_flights,
                 "booking_url": google_flights_url
             }
