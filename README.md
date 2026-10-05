@@ -49,7 +49,7 @@ Integrates Google Flights data directly into your AI workflow with natural langu
 
 ### Prompts
 
-10 built-in travel planning prompts: `find_best_deal`, `weekend_getaway`, `last_minute_travel`, `business_trip`, `family_vacation`, `budget_backpacker`, `loyalty_program_optimizer`, `holiday_peak_travel`, `long_haul_international`, `stopover_explorer`.
+11 built-in travel planning prompts: `find_best_deal`, `weekend_getaway`, `last_minute_travel`, `business_trip`, `family_vacation`, `budget_backpacker`, `loyalty_program_optimizer`, `holiday_peak_travel`, `long_haul_international`, `stopover_explorer`, `reliable_search_strategy`.
 
 ---
 
