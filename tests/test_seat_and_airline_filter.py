@@ -128,6 +128,48 @@ def test_airline_filter_matches_expanded_names_only(airlines, expected):
     assert "ignored_airlines" not in output
 
 
+@pytest.mark.parametrize("kwargs, leg_count", [
+    ({}, 1),
+    ({"is_round_trip": True, "return_date": "2026-12-08"}, 2),
+])
+def test_scraper_flight_query_normalizes_mixed_airline_tokens(kwargs, leg_count):
+    """Alliance spellings and display names must not be encoded raw into the scrape."""
+    seen = []
+    real_create_query = server.create_query
+
+    def spy_create_query(**query_kwargs):
+        seen.append(query_kwargs["flights"])
+        return real_create_query(**query_kwargs)
+
+    airlines = ["oneworld", "Star Alliance", "United", "ua"]
+    with patch.object(server, "SERPAPI_ENABLED", False), \
+         patch.object(server, "try_serpapi_fallback") as serpapi, \
+         patch.object(server, "create_query", side_effect=spy_create_query), \
+         patch.object(server, "get_flights", side_effect=_fake_get_flights(FLIGHTS)) as get_flights:
+        output = _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", airlines, **kwargs))
+
+    expected = ["ONEWORLD", "STAR_ALLIANCE", "UA"]
+    assert server.normalize_airline_tokens(airlines) == expected
+    search_legs = [legs for legs in seen if any(leg.airlines for leg in legs)]
+    assert len(search_legs) == 1
+    assert [leg.airlines for leg in search_legs[0]] == [expected] * leg_count
+    encoded = get_flights.call_args.args[0].flight_data
+    assert [list(leg.airlines) for leg in encoded] == [expected] * leg_count
+    serpapi.assert_not_called()
+    assert output["search_parameters"]["airlines"] == airlines
+    assert output["ignored_airlines"] == ["United"]
+    assert [flight["airlines"] for flight in output["flights"]] == [
+        "Qantas",
+        "Alaska",
+        "Air Canada",
+        "ANA",
+        "United, Lufthansa",
+        "Air India",
+        "Hawaiian",
+        "ITA Airways",
+    ]
+
+
 def test_raw_code_does_not_substring_match_other_airlines():
     targets, unrecognized = server.expand_airline_filter(["AS"])
     assert unrecognized == []
