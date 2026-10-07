@@ -256,6 +256,19 @@ def is_iata_airline_code(key: str) -> bool:
     return re.fullmatch(r"[A-Z0-9]{2}", key) is not None
 
 
+def normalize_airline_tokens(airlines: List[str]) -> List[str]:
+    """IATA codes and alliance tokens for the fast-flights query and SerpApi.
+
+    Display names are omitted. fast-flights encodes this list into the Google
+    query, and a raw value such as "oneworld" or "United" empties the scrape.
+    """
+    return [
+        key
+        for key in (normalize_airline_key(raw) for raw in airlines)
+        if key in ALLIANCE_TO_CODES or is_iata_airline_code(key)
+    ]
+
+
 def expand_airline_filter(airlines: List[str]) -> tuple[set, List[str]]:
     """Expand airline codes and alliance names to the airline names fast-flights reports.
 
@@ -2271,6 +2284,8 @@ async def search_flights_by_airline(
                 "type": "ValueError"
             }})
 
+        query_airlines = normalize_airline_tokens(airlines_list)
+
         trip_desc = f"{'round-trip' if is_round_trip else 'one-way'}"
         log_info(TOOL, f"{trip_desc.capitalize()} {origin}→{destination} on {airlines_list}")
         log_debug(TOOL, "constraints", f"max_stops={max_stops}, seat={seat_type}, adults={adults}")
@@ -2289,13 +2304,13 @@ async def search_flights_by_airline(
                     date=date,
                     from_airport=origin,
                     to_airport=destination,
-                    airlines=airlines_list,
+                    airlines=query_airlines,
                 ),
                 FlightQuery(
                     date=return_date,
                     from_airport=destination,
                     to_airport=origin,
-                    airlines=airlines_list,
+                    airlines=query_airlines,
                 ),
             ]
             trip_type = "round-trip"
@@ -2306,7 +2321,7 @@ async def search_flights_by_airline(
                     date=date,
                     from_airport=origin,
                     to_airport=destination,
-                    airlines=airlines_list,
+                    airlines=query_airlines,
                 ),
             ]
             trip_type = "one-way"
@@ -2334,16 +2349,12 @@ async def search_flights_by_airline(
             # fast-flights results only carry airline display names, so codes without a
             # name mapping can only be filtered server-side by SerpApi's include_airlines.
             log_info(TOOL, f"No airline-name mapping for {unmapped_codes}; using SerpApi airline filter")
-            serpapi_airlines = [
-                key for key in (normalize_airline_key(a) for a in airlines_list)
-                if key in ALLIANCE_TO_CODES or is_iata_airline_code(key)
-            ]
             serpapi_output = try_serpapi_fallback(
                 TOOL, origin, destination, date,
                 adults=adults,
                 seat_type=seat_type,
                 max_stops=to_serpapi_stops(max_stops),
-                airlines=serpapi_airlines,
+                airlines=query_airlines,
                 return_cheapest_only=return_cheapest_only,
                 max_results=max_results,
             )
@@ -2357,13 +2368,13 @@ async def search_flights_by_airline(
                 }
                 if "result_metadata" in serpapi_data:
                     output_data["result_metadata"] = serpapi_data["result_metadata"]
-                ignored_airlines = [a for a in airlines_list if normalize_airline_key(a) not in serpapi_airlines]
+                ignored_airlines = [a for a in airlines_list if normalize_airline_key(a) not in query_airlines]
                 if ignored_airlines:
                     output_data["ignored_airlines"] = ignored_airlines
                 return json.dumps(output_data, indent=2)
             if not target_airline_names:
                 return json.dumps({"error": {
-                    "message": f"SerpApi airline search returned no results for {serpapi_airlines}",
+                    "message": f"SerpApi airline search returned no results for {query_airlines}",
                     "type": "RuntimeError"
                 }})
         if unrecognized_airlines:
