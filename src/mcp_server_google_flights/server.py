@@ -1613,7 +1613,9 @@ async def search_one_way_flights(
         )
         result = get_flights(query)
 
-        google_flights_url = _make_google_flights_url(origin, destination, date, seat=seat_type)
+        google_flights_url = _make_google_flights_url(
+            origin, destination, date, adults=adults, children=children, seat=seat_type
+        )
 
         if result:
             log_info(TOOL, f"Found {len(result)} flight(s)")
@@ -1685,7 +1687,9 @@ async def search_one_way_flights(
         if fallback_result:
             return fallback_result
 
-        google_flights_url = _make_google_flights_url(origin, destination, date, seat=seat_type)
+        google_flights_url = _make_google_flights_url(
+            origin, destination, date, adults=adults, children=children, seat=seat_type
+        )
         response_data = {
             "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
             "search_parameters": {
@@ -1727,7 +1731,9 @@ async def search_one_way_flights(
         if fallback_result:
             return fallback_result
 
-        google_flights_url = _make_google_flights_url(origin, destination, date, seat=seat_type)
+        google_flights_url = _make_google_flights_url(
+            origin, destination, date, adults=adults, children=children, seat=seat_type
+        )
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
             "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly.",
@@ -1809,7 +1815,10 @@ async def search_round_trip_flights(
         )
         result = get_flights(query)
 
-        google_flights_url = _make_google_flights_url(origin, destination, departure_date, return_date=return_date, seat=seat_type)
+        google_flights_url = _make_google_flights_url(
+            origin, destination, departure_date, return_date=return_date,
+            adults=adults, children=children, seat=seat_type,
+        )
 
         if result:
             log_info(TOOL, f"Found {len(result)} round-trip option(s)")
@@ -1894,7 +1903,8 @@ async def search_round_trip_flights(
             return fallback_result
 
         google_flights_url = _make_google_flights_url(
-            origin, destination, departure_date, return_date=return_date, seat=seat_type
+            origin, destination, departure_date, return_date=return_date,
+            adults=adults, children=children, seat=seat_type,
         )
         response_data = {
             "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
@@ -1941,7 +1951,8 @@ async def search_round_trip_flights(
             return fallback_result
 
         google_flights_url = _make_google_flights_url(
-            origin, destination, departure_date, return_date=return_date, seat=seat_type
+            origin, destination, departure_date, return_date=return_date,
+            adults=adults, children=children, seat=seat_type,
         )
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
@@ -2109,6 +2120,7 @@ async def search_round_trips_in_date_range(
                 origin, destination,
                 depart_date.strftime('%Y-%m-%d'),
                 return_date=return_date.strftime('%Y-%m-%d'),
+                adults=adults,
                 seat=seat_type,
             )
 
@@ -2314,6 +2326,7 @@ async def search_flights_by_airline(
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
+            adults=adults,
             seat=seat_type,
         )
 
@@ -2435,6 +2448,7 @@ async def search_flights_by_airline(
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
+            adults=adults,
             seat=seat_type,
         )
         response_data = {
@@ -2461,6 +2475,7 @@ async def search_flights_by_airline(
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
+            adults=adults,
             seat=seat_type,
         )
         response_data = {
