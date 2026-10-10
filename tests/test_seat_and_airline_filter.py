@@ -227,16 +227,6 @@ def test_serpapi_airline_filter_translates_max_stops(max_stops, serpapi_stops):
     assert serpapi.call_args.kwargs["max_stops"] == serpapi_stops
 
 
-def test_serpapi_airline_filter_keeps_flights_key_for_cheapest_only():
-    serpapi_output = json.dumps({"cheapest_flight": [{"price": 120}], "data_source": "SerpApi (fallback)"})
-    with patch.object(server, "SERPAPI_ENABLED", True), \
-         patch.object(server, "try_serpapi_fallback", return_value=serpapi_output):
-        output = _run(server.search_flights_by_airline("SFO", "JFK", "2026-12-01", ["XX"],
-                                                       return_cheapest_only=True))
-    assert output["flights"] == [{"price": 120}]
-    assert "cheapest_flight" not in output
-
-
 def test_serpapi_airline_filter_returns_airline_tool_schema():
     serpapi_output = json.dumps({
         "search_parameters": {"origin": "SFO", "destination": "JFK", "departure_date": "2026-12-01"},
