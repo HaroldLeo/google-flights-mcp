@@ -81,6 +81,8 @@ def _google_flights_query_url(
     return_date: Optional[str] = None,
     adults: int = 1,
     children: int = 0,
+    infants_in_seat: int = 0,
+    infants_on_lap: int = 0,
     seat: str = "economy",
 ) -> str:
     flights = [
@@ -95,7 +97,12 @@ def _google_flights_query_url(
         flights=flights,
         trip=trip,
         seat=normalize_seat_type(seat),
-        passengers=Passengers(adults=adults, children=children),
+        passengers=Passengers(
+            adults=adults,
+            children=children,
+            infants_in_seat=infants_in_seat,
+            infants_on_lap=infants_on_lap,
+        ),
     )
     return query.url()
 
@@ -107,6 +114,8 @@ def _make_google_flights_url(
     return_date: Optional[str] = None,
     adults: int = 1,
     children: int = 0,
+    infants_in_seat: int = 0,
+    infants_on_lap: int = 0,
     seat: str = "economy",
 ) -> str:
     try:
@@ -117,6 +126,8 @@ def _make_google_flights_url(
             return_date=return_date,
             adults=adults,
             children=children,
+            infants_in_seat=infants_in_seat,
+            infants_on_lap=infants_on_lap,
             seat=seat,
         )
     except (KeyError, TypeError, ValueError):
@@ -1029,6 +1040,8 @@ def try_serpapi_fallback(
                         return_date=return_date,
                         adults=adults,
                         children=children,
+                        infants_in_seat=infants_in_seat,
+                        infants_on_lap=infants_on_lap,
                         seat=seat_type,
                     ),
                     "data_source": "SerpApi (fallback)",
@@ -1627,7 +1640,10 @@ async def search_one_way_flights(
         result = get_flights(query)
 
         google_flights_url = _make_google_flights_url(
-            origin, destination, date, adults=adults, children=children, seat=seat_type
+            origin, destination, date,
+            adults=adults, children=children,
+            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
+            seat=seat_type,
         )
 
         if result:
@@ -1701,7 +1717,10 @@ async def search_one_way_flights(
             return fallback_result
 
         google_flights_url = _make_google_flights_url(
-            origin, destination, date, adults=adults, children=children, seat=seat_type
+            origin, destination, date,
+            adults=adults, children=children,
+            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
+            seat=seat_type,
         )
         response_data = {
             "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
@@ -1745,7 +1764,10 @@ async def search_one_way_flights(
             return fallback_result
 
         google_flights_url = _make_google_flights_url(
-            origin, destination, date, adults=adults, children=children, seat=seat_type
+            origin, destination, date,
+            adults=adults, children=children,
+            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
+            seat=seat_type,
         )
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},
@@ -1830,7 +1852,9 @@ async def search_round_trip_flights(
 
         google_flights_url = _make_google_flights_url(
             origin, destination, departure_date, return_date=return_date,
-            adults=adults, children=children, seat=seat_type,
+            adults=adults, children=children,
+            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
+            seat=seat_type,
         )
 
         if result:
@@ -1917,7 +1941,9 @@ async def search_round_trip_flights(
 
         google_flights_url = _make_google_flights_url(
             origin, destination, departure_date, return_date=return_date,
-            adults=adults, children=children, seat=seat_type,
+            adults=adults, children=children,
+            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
+            seat=seat_type,
         )
         response_data = {
             "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
@@ -1965,7 +1991,9 @@ async def search_round_trip_flights(
 
         google_flights_url = _make_google_flights_url(
             origin, destination, departure_date, return_date=return_date,
-            adults=adults, children=children, seat=seat_type,
+            adults=adults, children=children,
+            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
+            seat=seat_type,
         )
         response_data = {
             "error": {"message": error_msg, "type": type(e).__name__},

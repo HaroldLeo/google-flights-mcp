@@ -474,6 +474,130 @@ def test_other_scraper_booking_urls_keep_adult_count():
     assert airline_error["google_flights_url"] == airline_expected
 
 
+def _tfs_passengers(url):
+    """Passenger enums encoded in the Google Flights ``tfs`` token."""
+    from base64 import b64decode
+
+    from fast_flights.pb.flights_pb2 import Info
+
+    tfs = next(part[4:] for part in url.split("?", 1)[1].split("&") if part.startswith("tfs="))
+    info = Info()
+    info.ParseFromString(b64decode(tfs))
+    return list(info.passengers)
+
+
+def _assert_url_party(url, adults, children=0, infants_in_seat=0, infants_on_lap=0):
+    from fast_flights.pb.flights_pb2 import Passenger
+
+    assert _tfs_passengers(url) == (
+        [Passenger.ADULT] * adults
+        + [Passenger.CHILD] * children
+        + [Passenger.INFANT_IN_SEAT] * infants_in_seat
+        + [Passenger.INFANT_ON_LAP] * infants_on_lap
+    )
+
+
+_INFANT_PARTY = dict(adults=2, children=1, infants_in_seat=1, infants_on_lap=1)
+
+
+@pytest.mark.parametrize("call, url_kwargs", [
+    pytest.param(
+        lambda: server.search_one_way_flights(
+            "SFO", "JFK", "2026-12-01", return_cheapest_only=True, **_INFANT_PARTY,
+        ),
+        {"return_date": None},
+        id="one-way",
+    ),
+    pytest.param(
+        lambda: server.search_round_trip_flights(
+            "SFO", "JFK", "2026-12-01", "2026-12-08",
+            return_cheapest_only=True, **_INFANT_PARTY,
+        ),
+        {"return_date": "2026-12-08"},
+        id="round-trip",
+    ),
+])
+def test_fallback_booking_url_keeps_infants(call, url_kwargs):
+    captured = []
+    payload = {"best_flights": [_serp_offer(210)]}
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "GoogleSearch", _recording_search(captured, payload), create=True), \
+         patch.object(server, "get_flights", side_effect=server.FlightsNotFound("missing")):
+        output = _run(call())
+
+    expected = server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01", seat="economy", **_INFANT_PARTY, **url_kwargs
+    )
+    without_infants = server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01", adults=2, children=1, seat="economy", **url_kwargs
+    )
+    assert expected != without_infants
+    assert output["booking_url"] == expected
+    _assert_url_party(output["booking_url"], **_INFANT_PARTY)
+    assert captured[0]["infants_in_seat"] == 1
+    assert captured[0]["infants_on_lap"] == 1
+
+
+@pytest.mark.parametrize("call, url_kwargs", [
+    pytest.param(
+        lambda: server.search_one_way_flights("SFO", "JFK", "2026-12-01", **_INFANT_PARTY),
+        {"return_date": None},
+        id="one-way",
+    ),
+    pytest.param(
+        lambda: server.search_round_trip_flights(
+            "SFO", "JFK", "2026-12-01", "2026-12-08", **_INFANT_PARTY,
+        ),
+        {"return_date": "2026-12-08"},
+        id="round-trip",
+    ),
+])
+def test_scraper_booking_url_keeps_infants(call, url_kwargs):
+    with patch.object(server, "get_flights", side_effect=_fake_get_flights([_flight("United")])):
+        output = _run(call())
+
+    expected = server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01", seat="economy", **_INFANT_PARTY, **url_kwargs
+    )
+    without_infants = server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01", adults=2, children=1, seat="economy", **url_kwargs
+    )
+    assert expected != without_infants
+    assert output["booking_url"] == expected
+    _assert_url_party(output["booking_url"], **_INFANT_PARTY)
+
+
+@pytest.mark.parametrize("exc", [server.FlightsNotFound("missing"), RuntimeError("scraper down")])
+@pytest.mark.parametrize("call, url_kwargs", [
+    pytest.param(
+        lambda: server.search_one_way_flights("SFO", "JFK", "2026-12-01", **_INFANT_PARTY),
+        {"return_date": None},
+        id="one-way",
+    ),
+    pytest.param(
+        lambda: server.search_round_trip_flights(
+            "SFO", "JFK", "2026-12-01", "2026-12-08", **_INFANT_PARTY,
+        ),
+        {"return_date": "2026-12-08"},
+        id="round-trip",
+    ),
+])
+def test_scraper_error_url_keeps_infants(exc, call, url_kwargs):
+    with patch.object(server, "SERPAPI_ENABLED", False), \
+         patch.object(server, "get_flights", side_effect=exc):
+        output = _run(call())
+
+    expected = server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01", seat="economy", **_INFANT_PARTY, **url_kwargs
+    )
+    without_infants = server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01", adults=2, children=1, seat="economy", **url_kwargs
+    )
+    assert expected != without_infants
+    assert output["google_flights_url"] == expected
+    _assert_url_party(output["google_flights_url"], **_INFANT_PARTY)
+
+
 @pytest.mark.parametrize("seat_type", ["premium-economy", "premium_economy"])
 def test_round_trip_fallback_maps_premium_economy_travel_class(seat_type):
     captured = []
