@@ -1996,14 +1996,14 @@ async def search_round_trips_in_date_range(
     Finds available round-trip flights within a specified date range.
     Can optionally return only the cheapest flight found for each date pair.
 
-    ⚠️ RATE LIMIT WARNING: This function makes multiple Google Flights scraping requests.
-    Each date pair combination = 1 request. The function is LIMITED to a MAXIMUM of 30
-    requests to prevent rate limiting and IP blocking.
+    Pages by date pair via offset and limit. Each date pair is one Google Flights
+    request, and a single call is capped at 30 requests. limit (default 20) is the
+    page size; offset skips that many pairs. A non-positive limit returns every
+    remaining pair from offset (still subject to the 30-request cap).
 
-    Example request counts:
-    - 7 day range with 5-7 day stays: ~10-15 requests (Safe)
-    - 14 day range with no limits: ~105 requests (WILL BE REJECTED)
-    - 30 day range: ~465 requests (WILL BE REJECTED)
+    A 14-day range (~105 pairs) or a 30-day range (~465 pairs) is not rejected
+    when paged. The default limit of 20 stays under the cap; advance offset by
+    limit to continue.
 
     💡 TIP: Use min_stay_days and max_stay_days to reduce combinations.
     Set return_cheapest_only=true for faster results.
@@ -2020,9 +2020,9 @@ async def search_round_trips_in_date_range(
         max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
         return_cheapest_only: If True, returns only the cheapest flight for each date pair (default: False).
         max_results: Maximum number of results to return (default: 10). Set to 0 or -1 for unlimited.
-        offset: Number of results to skip (for pagination, default: 0).
-        compact_mode: If True, return only essential fields (saves ~40% tokens, default: False).
-        limit: Maximum number of date pairs to process (for pagination, default: 20).
+        offset: Number of date pairs to skip (for pagination, default: 0).
+        limit: Maximum number of date pairs to fetch this call (default: 20).
+            Set to 0 or -1 to return every remaining pair from offset.
 
     Example Args:
         {"origin": "JFK", "destination": "MIA", "start_date_str": "2025-09-10", "end_date_str": "2025-09-20", "min_stay_days": 5}
@@ -2199,7 +2199,7 @@ async def search_round_trips_in_date_range(
                 "limit": limit,
                 "returned": len(results_data),
                 "total_date_pairs": total_date_pairs,
-                "has_more": offset + limit < total_date_pairs
+                "has_more": limit > 0 and offset + limit < total_date_pairs
             }
         }
         return json.dumps(output_data, indent=2)
