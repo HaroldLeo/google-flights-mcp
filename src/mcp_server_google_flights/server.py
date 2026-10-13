@@ -1,6 +1,5 @@
 
 #!/usr/bin/env python
-import asyncio
 import json
 import datetime
 import math
@@ -549,23 +548,6 @@ def parse_price(price):
         except ValueError:
             return float('inf')
     return float('inf')
-
-def get_date_range(year, month):
-    """Generates all dates within a given month."""
-    try:
-        start_date = datetime.date(year, month, 1)
-        # Find the first day of the next month, then subtract one day
-        if month == 12:
-            end_date = datetime.date(year + 1, 1, 1) - datetime.timedelta(days=1)
-        else:
-            end_date = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
-    except ValueError: # Handle invalid year/month
-        return []
-
-    current_date = start_date
-    while current_date <= end_date:
-        yield current_date
-        current_date += datetime.timedelta(days=1)
 
 
 # --- SerpApi Integration Functions ---
@@ -1644,7 +1626,6 @@ async def search_one_way_flights(
                     flight_to_dict(f, compact=compact_mode, trip="one-way")
                     for f in flights_to_process
                 ]
-            result_key = "flights"
 
             output_data = {
                 "search_parameters": {
@@ -1658,7 +1639,7 @@ async def search_one_way_flights(
                     "seat_type": seat_type,
                     "return_cheapest_only": return_cheapest_only
                 },
-                result_key: processed_flights,
+                "flights": processed_flights,
                 "booking_url": google_flights_url
             }
             if not return_cheapest_only and max_results > 0:
@@ -1858,7 +1839,6 @@ async def search_round_trip_flights(
                     )
                     for f in flights_to_process
                 ]
-            result_key = "flights"
 
             output_data = {
                 "search_parameters": {
@@ -1874,7 +1854,7 @@ async def search_round_trip_flights(
                     "max_stops": max_stops,
                     "return_cheapest_only": return_cheapest_only
                 },
-                result_key: processed_flights,
+                "flights": processed_flights,
                 "booking_url": google_flights_url,
                 "round_trip_note": (
                     "Results are outbound options with round-trip total prices. "
@@ -2362,7 +2342,7 @@ async def search_flights_by_airline(
                 serpapi_data = json.loads(serpapi_output)
                 output_data = {
                     "search_parameters": search_parameters,
-                    "flights": serpapi_data.get("flights", serpapi_data.get("cheapest_flight", [])),
+                    "flights": serpapi_data.get("flights", []),
                     "booking_url": google_flights_url,
                     "data_source": serpapi_data.get("data_source"),
                 }
@@ -2420,7 +2400,6 @@ async def search_flights_by_airline(
                         trip=trip_type,
                     )
                 ]
-                result_key = "flights"
             else:
                 flights_to_process = result[:max_results] if max_results > 0 else result
                 processed_flights = [
@@ -2433,11 +2412,10 @@ async def search_flights_by_airline(
                     )
                     for f in flights_to_process
                 ]
-                result_key = "flights"
 
             output_data = {
                 "search_parameters": search_parameters,
-                result_key: processed_flights,
+                "flights": processed_flights,
                 "booking_url": google_flights_url
             }
             if unrecognized_airlines:
