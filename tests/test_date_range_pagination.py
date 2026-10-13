@@ -85,3 +85,18 @@ def test_default_limit_pages_a_range_larger_than_the_request_cap():
     assert page["returned"] == 20
     assert page["has_more"] is True
     assert mock.call_count == 20
+
+
+def test_empty_page_still_returns_pagination():
+    # Six pairs; offset 6 is the first page past the end, so nothing is fetched.
+    output, mock = _search(offset=6, limit=2)
+    assert "error" not in output
+    page = output["pagination"]
+    assert page == {
+        "offset": 6,
+        "limit": 2,
+        "returned": 0,
+        "total_date_pairs": 6,
+        "has_more": False,
+    }
+    assert mock.call_count == 0
