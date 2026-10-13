@@ -1592,6 +1592,8 @@ async def search_one_way_flights(
         infants_on_lap: Number of infants on lap (under 2 years, default: 0).
         seat_type: Fare class - economy/premium_economy/business/first (default: "economy").
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
+        max_results: Maximum number of results to return (default: 10). Set to 0 or -1 for unlimited.
+        compact_mode: If True, scraper results omit segments and carbon emissions (saves ~40% tokens, default: False). SerpApi fallback responses are unchanged and still include those fields.
 
     Example Args:
         {"origin": "SFO", "destination": "JFK", "date": "2025-07-20"}
@@ -1795,6 +1797,8 @@ async def search_round_trip_flights(
         max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
                    Lower values = more reliable scraping. Set higher if needed, but may reduce reliability.
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
+        max_results: Maximum number of results to return (default: 10). Set to 0 or -1 for unlimited.
+        compact_mode: If True, scraper results omit segments and carbon emissions (saves ~40% tokens, default: False). SerpApi fallback responses are unchanged and still include those fields.
 
     Example Args:
         {"origin": "DEN", "destination": "LAX", "departure_date": "2025-08-01", "return_date": "2025-08-08"}
@@ -2263,6 +2267,8 @@ async def search_flights_by_airline(
         seat_type: Fare class - economy/premium_economy/business/first (default: "economy").
         max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
+        max_results: Maximum number of results to return (default: 10). Set to 0 or -1 for unlimited.
+        compact_mode: If True, scraper results omit segments and carbon emissions (saves ~40% tokens, default: False). SerpApi fallback responses are unchanged and still include those fields.
 
     Example Args:
         {"origin": "SFO", "destination": "TYO", "date": "2026-02-20", "airlines": ["UA"]}
