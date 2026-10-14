@@ -182,7 +182,7 @@ def test_scraper_failure_without_fallback_results_returns_url_payload(tool, exc,
     assert seen[0]["max_results"] == 3
     if tool == "one-way":
         assert seen[0]["return_date"] is None
-        assert "max_stops" not in seen[0]
+        assert seen[0]["max_stops"] is None
     else:
         assert seen[0]["return_date"] == "2026-12-08"
         assert seen[0]["max_stops"] == server.to_serpapi_stops(1)

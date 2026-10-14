@@ -6,6 +6,7 @@ import math
 import sys
 import os
 import re
+import traceback
 from typing import Any, Optional, Dict, List
 
 try:
@@ -1056,9 +1057,6 @@ def try_serpapi_fallback(
     return None
 
 
-_UNSET = object()
-
-
 def _fallback_or_flights_url(
     tool_name: str,
     exc: Exception,
@@ -1074,7 +1072,7 @@ def _fallback_or_flights_url(
     seat_type: str = "economy",
     return_cheapest_only: bool = False,
     max_results: int = 10,
-    max_stops: Any = _UNSET,
+    max_stops: Optional[int] = None,
     log_traceback: bool = False,
     not_found_note: Optional[str] = None,
     search_parameters: Optional[Dict] = None,
@@ -1083,27 +1081,23 @@ def _fallback_or_flights_url(
     error_msg = str(exc)
     log_error(tool_name, type(exc).__name__, error_msg)
     if log_traceback:
-        import traceback
         log_debug(tool_name, "traceback", traceback.format_exc())
 
-    fallback_kwargs = {
-        "tool_name": tool_name,
-        "origin": origin,
-        "destination": destination,
-        "departure_date": departure_date,
-        "return_date": return_date,
-        "adults": adults,
-        "children": children,
-        "infants_in_seat": infants_in_seat,
-        "infants_on_lap": infants_on_lap,
-        "seat_type": seat_type,
-        "return_cheapest_only": return_cheapest_only,
-        "max_results": max_results,
-    }
-    if max_stops is not _UNSET:
-        fallback_kwargs["max_stops"] = max_stops
-
-    fallback_result = try_serpapi_fallback(**fallback_kwargs)
+    fallback_result = try_serpapi_fallback(
+        tool_name=tool_name,
+        origin=origin,
+        destination=destination,
+        departure_date=departure_date,
+        return_date=return_date,
+        adults=adults,
+        children=children,
+        infants_in_seat=infants_in_seat,
+        infants_on_lap=infants_on_lap,
+        seat_type=seat_type,
+        max_stops=max_stops,
+        return_cheapest_only=return_cheapest_only,
+        max_results=max_results,
+    )
     if fallback_result:
         return fallback_result
 
