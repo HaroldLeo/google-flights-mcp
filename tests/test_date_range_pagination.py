@@ -85,3 +85,32 @@ def test_default_limit_pages_a_range_larger_than_the_request_cap():
     assert page["returned"] == 20
     assert page["has_more"] is True
     assert mock.call_count == 20
+
+
+def test_empty_scraper_page_includes_pagination_with_has_more_false():
+    with patch.object(server, "get_flights", return_value=[]) as mock:
+        output = _run(server.search_round_trips_in_date_range(
+            "SFO", "JFK", "2026-12-01", "2026-12-03",
+        ))
+    page = output["pagination"]
+    assert page["offset"] == 0
+    assert page["limit"] == 20
+    assert page["returned"] == 0
+    assert page["total_date_pairs"] == 6
+    assert page["has_more"] is False
+    assert output["all_round_trip_options"] == []
+    assert "message" not in output
+    assert mock.call_count == 6
+
+
+def test_offset_past_end_includes_pagination_with_has_more_false():
+    output, mock = _search(offset=6, limit=2)
+    page = output["pagination"]
+    assert page["offset"] == 6
+    assert page["limit"] == 2
+    assert page["returned"] == 0
+    assert page["total_date_pairs"] == 6
+    assert page["has_more"] is False
+    assert output["all_round_trip_options"] == []
+    assert "message" not in output
+    assert mock.call_count == 0

@@ -2071,9 +2071,6 @@ async def search_round_trips_in_date_range(
         date_list.append(current_date)
         current_date += datetime.timedelta(days=1)
 
-    if not date_list:
-         return json.dumps({"error": "No valid dates in the specified range."})
-
     total_combinations = 0
     date_pairs_to_check = []
     for i, depart_date in enumerate(date_list):
@@ -2187,45 +2184,31 @@ async def search_round_trips_in_date_range(
 
     log_info(TOOL, f"Complete: Found {len(results_data)} results, {len(error_messages)} errors")
 
-    # Return collected flight data
-    if results_data or error_messages: # Return even if only errors were found
-        # Determine the key for the results based on the mode
-        results_key = "cheapest_option_per_date_pair" if return_cheapest_only else "all_round_trip_options"
-        output_data = {
-            "search_parameters": {
-                "origin": origin,
-                "destination": destination,
-                "start_date": start_date_str,
-                "end_date": end_date_str,
-                "min_stay_days": min_stay_days,
-                "max_stay_days": max_stay_days,
-                "adults": adults,
-                "seat_type": seat_type,
-                "max_stops": max_stops,
-                "return_cheapest_only": return_cheapest_only # Include parameter in output
-            },
-            results_key: results_data, # Use dynamic key for results
-            "errors_encountered": error_messages if error_messages else None,
-            "pagination": {
-                "offset": offset,
-                "limit": limit,
-                "returned": len(results_data),
-                "total_date_pairs": total_date_pairs,
-                "has_more": limit > 0 and offset + limit < total_date_pairs
-            }
+    results_key = "cheapest_option_per_date_pair" if return_cheapest_only else "all_round_trip_options"
+    output_data = {
+        "search_parameters": {
+            "origin": origin,
+            "destination": destination,
+            "start_date": start_date_str,
+            "end_date": end_date_str,
+            "min_stay_days": min_stay_days,
+            "max_stay_days": max_stay_days,
+            "adults": adults,
+            "seat_type": seat_type,
+            "max_stops": max_stops,
+            "return_cheapest_only": return_cheapest_only # Include parameter in output
+        },
+        results_key: results_data, # Use dynamic key for results
+        "errors_encountered": error_messages if error_messages else None,
+        "pagination": {
+            "offset": offset,
+            "limit": limit,
+            "returned": len(results_data),
+            "total_date_pairs": total_date_pairs,
+            "has_more": limit > 0 and offset + limit < total_date_pairs
         }
-        return json.dumps(output_data, indent=2)
-    else:
-        # This case should ideally not be reached if the loop runs and finds nothing,
-        # but kept as a fallback.
-        return json.dumps({
-            "message": f"No flights found and no errors encountered for {origin} -> {destination} in the range {start_date_str} to {end_date_str}.",
-            "search_parameters": {
-                 "origin": origin, "destination": destination, "start_date": start_date_str, "end_date": end_date_str,
-                 "min_stay_days": min_stay_days, "max_stay_days": max_stay_days, "adults": adults, "seat_type": seat_type, "max_stops": max_stops
-            },
-            "errors_encountered": error_messages if error_messages else None
-        })
+    }
+    return json.dumps(output_data, indent=2)
 
 
 
