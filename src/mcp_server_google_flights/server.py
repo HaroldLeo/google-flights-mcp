@@ -6,6 +6,7 @@ import math
 import sys
 import os
 import re
+import traceback
 from typing import Any, Optional, Dict, List
 
 try:
@@ -1056,6 +1057,80 @@ def try_serpapi_fallback(
     return None
 
 
+def _fallback_or_flights_url(
+    tool_name: str,
+    exc: Exception,
+    *,
+    origin: str,
+    destination: str,
+    departure_date: str,
+    return_date: Optional[str] = None,
+    adults: int = 1,
+    children: int = 0,
+    infants_in_seat: int = 0,
+    infants_on_lap: int = 0,
+    seat_type: str = "economy",
+    return_cheapest_only: bool = False,
+    max_results: int = 10,
+    max_stops: Optional[int] = None,
+    log_traceback: bool = False,
+    not_found_note: Optional[str] = None,
+    search_parameters: Optional[Dict] = None,
+) -> str:
+    """After a scraper failure, return SerpApi results or the Google Flights URL payload."""
+    error_msg = str(exc)
+    log_error(tool_name, type(exc).__name__, error_msg)
+    if log_traceback:
+        log_debug(tool_name, "traceback", traceback.format_exc())
+
+    fallback_result = try_serpapi_fallback(
+        tool_name=tool_name,
+        origin=origin,
+        destination=destination,
+        departure_date=departure_date,
+        return_date=return_date,
+        adults=adults,
+        children=children,
+        infants_in_seat=infants_in_seat,
+        infants_on_lap=infants_on_lap,
+        seat_type=seat_type,
+        max_stops=max_stops,
+        return_cheapest_only=return_cheapest_only,
+        max_results=max_results,
+    )
+    if fallback_result:
+        return fallback_result
+
+    google_flights_url = _make_google_flights_url(
+        origin,
+        destination,
+        departure_date,
+        return_date=return_date,
+        adults=adults,
+        children=children,
+        infants_in_seat=infants_in_seat,
+        infants_on_lap=infants_on_lap,
+        seat=seat_type,
+    )
+    serpapi_note = "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None
+    if not_found_note is not None:
+        response_data = {
+            "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
+            "search_parameters": search_parameters,
+            "note": not_found_note,
+            "serpapi_note": serpapi_note,
+            "google_flights_url": google_flights_url,
+        }
+    else:
+        response_data = {
+            "error": {"message": error_msg, "type": type(exc).__name__},
+            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly.",
+            "serpapi_note": serpapi_note,
+            "google_flights_url": google_flights_url,
+        }
+    return json.dumps(response_data)
+
+
 # --- MCP Resources ---
 
 @mcp.resource("airports://all")
@@ -1679,35 +1754,21 @@ async def search_one_way_flights(
          error_payload = {"error": {"message": f"Invalid date format: '{date}'. Please use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
     except FlightsNotFound as e:
-        error_msg = str(e)
-        log_error(TOOL, type(e).__name__, error_msg)
-
-        fallback_result = try_serpapi_fallback(
-            tool_name=TOOL,
+        return _fallback_or_flights_url(
+            TOOL,
+            e,
             origin=origin,
             destination=destination,
             departure_date=date,
-            return_date=None,
             adults=adults,
             children=children,
             infants_in_seat=infants_in_seat,
             infants_on_lap=infants_on_lap,
             seat_type=seat_type,
             return_cheapest_only=return_cheapest_only,
-            max_results=max_results
-        )
-        if fallback_result:
-            return fallback_result
-
-        google_flights_url = _make_google_flights_url(
-            origin, destination, date,
-            adults=adults, children=children,
-            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
-            seat=seat_type,
-        )
-        response_data = {
-            "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
-            "search_parameters": {
+            max_results=max_results,
+            not_found_note="One-way searches may not return results via scraping. Click the URL below to view flights in your browser.",
+            search_parameters={
                 "origin": origin,
                 "destination": destination,
                 "date": date,
@@ -1715,50 +1776,25 @@ async def search_one_way_flights(
                 "children": children,
                 "infants_in_seat": infants_in_seat,
                 "infants_on_lap": infants_on_lap,
-                "seat_type": seat_type
+                "seat_type": seat_type,
             },
-            "note": "One-way searches may not return results via scraping. Click the URL below to view flights in your browser.",
-            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None,
-            "google_flights_url": google_flights_url,
-        }
-        return json.dumps(response_data)
+        )
     except Exception as e:
-        import traceback
-        error_msg = str(e)
-        log_error(TOOL, type(e).__name__, error_msg)
-        log_debug(TOOL, "traceback", traceback.format_exc())
-
-        # Try SerpApi fallback
-        fallback_result = try_serpapi_fallback(
-            tool_name=TOOL,
+        return _fallback_or_flights_url(
+            TOOL,
+            e,
             origin=origin,
             destination=destination,
             departure_date=date,
-            return_date=None,
             adults=adults,
             children=children,
             infants_in_seat=infants_in_seat,
             infants_on_lap=infants_on_lap,
             seat_type=seat_type,
             return_cheapest_only=return_cheapest_only,
-            max_results=max_results
+            max_results=max_results,
+            log_traceback=True,
         )
-        if fallback_result:
-            return fallback_result
-
-        google_flights_url = _make_google_flights_url(
-            origin, destination, date,
-            adults=adults, children=children,
-            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
-            seat=seat_type,
-        )
-        response_data = {
-            "error": {"message": error_msg, "type": type(e).__name__},
-            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly.",
-            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None,
-            "google_flights_url": google_flights_url,
-        }
-        return json.dumps(response_data)
 
 
 @mcp.tool()
@@ -1902,11 +1938,9 @@ async def search_round_trip_flights(
          error_payload = {"error": {"message": f"Invalid date format provided. Use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
     except FlightsNotFound as e:
-        error_msg = str(e)
-        log_error(TOOL, type(e).__name__, error_msg)
-
-        fallback_result = try_serpapi_fallback(
-            tool_name=TOOL,
+        return _fallback_or_flights_url(
+            TOOL,
+            e,
             origin=origin,
             destination=destination,
             departure_date=departure_date,
@@ -1916,22 +1950,11 @@ async def search_round_trip_flights(
             infants_in_seat=infants_in_seat,
             infants_on_lap=infants_on_lap,
             seat_type=seat_type,
-            max_stops=to_serpapi_stops(max_stops),
             return_cheapest_only=return_cheapest_only,
-            max_results=max_results
-        )
-        if fallback_result:
-            return fallback_result
-
-        google_flights_url = _make_google_flights_url(
-            origin, destination, departure_date, return_date=return_date,
-            adults=adults, children=children,
-            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
-            seat=seat_type,
-        )
-        response_data = {
-            "message": "The scraper couldn't find flights, but you can view results directly on Google Flights.",
-            "search_parameters": {
+            max_results=max_results,
+            max_stops=to_serpapi_stops(max_stops),
+            not_found_note=f"Round-trip searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser.",
+            search_parameters={
                 "origin": origin,
                 "destination": destination,
                 "departure_date": departure_date,
@@ -1941,22 +1964,13 @@ async def search_round_trip_flights(
                 "infants_in_seat": infants_in_seat,
                 "infants_on_lap": infants_on_lap,
                 "seat_type": seat_type,
-                "max_stops": max_stops
+                "max_stops": max_stops,
             },
-            "note": f"Round-trip searches with max {max_stops} stops may not return results via scraping. Try max_stops=0 or 1 for better reliability, or click the URL below to view flights in your browser.",
-            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None,
-            "google_flights_url": google_flights_url,
-        }
-        return json.dumps(response_data)
+        )
     except Exception as e:
-        import traceback
-        error_msg = str(e)
-        log_error(TOOL, type(e).__name__, error_msg)
-        log_debug(TOOL, "traceback", traceback.format_exc())
-
-        # Try SerpApi fallback
-        fallback_result = try_serpapi_fallback(
-            tool_name=TOOL,
+        return _fallback_or_flights_url(
+            TOOL,
+            e,
             origin=origin,
             destination=destination,
             departure_date=departure_date,
@@ -1966,26 +1980,11 @@ async def search_round_trip_flights(
             infants_in_seat=infants_in_seat,
             infants_on_lap=infants_on_lap,
             seat_type=seat_type,
-            max_stops=to_serpapi_stops(max_stops),
             return_cheapest_only=return_cheapest_only,
-            max_results=max_results
+            max_results=max_results,
+            max_stops=to_serpapi_stops(max_stops),
+            log_traceback=True,
         )
-        if fallback_result:
-            return fallback_result
-
-        google_flights_url = _make_google_flights_url(
-            origin, destination, departure_date, return_date=return_date,
-            adults=adults, children=children,
-            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
-            seat=seat_type,
-        )
-        response_data = {
-            "error": {"message": error_msg, "type": type(e).__name__},
-            "suggestion": "If you encounter issues, try searching with different parameters or check the Google Flights website directly.",
-            "serpapi_note": "Configure SERPAPI_API_KEY to enable automatic fallback to SerpApi." if not SERPAPI_ENABLED else None,
-            "google_flights_url": google_flights_url,
-        }
-        return json.dumps(response_data)
 
 
 @mcp.tool()
