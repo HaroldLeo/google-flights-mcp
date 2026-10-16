@@ -37,7 +37,7 @@ Integrates Google Flights data directly into your AI workflow with natural langu
 |------|-------------|
 | `search_one_way_flights` | One-way flights for a specific date |
 | `search_round_trip_flights` | Round-trip flights with fixed dates (supports `max_stops`) |
-| `search_round_trips_in_date_range` | Search all round-trip combinations within a date range |
+| `search_round_trips_in_date_range` | Page round-trip date pairs in a range (default limit 20; a page over 30 is rejected; advance offset to continue) |
 | `search_flights_by_airline` | Filter flights by airline codes or alliance (STAR_ALLIANCE, SKYTEAM, ONEWORLD) |
 | `get_travel_dates` | Calculate travel dates relative to today |
 | `generate_google_flights_url` | Generate a shareable Google Flights search link |
@@ -55,14 +55,6 @@ Integrates Google Flights data directly into your AI workflow with natural langu
 
 ## Quick Start
 
-### Option 1: Install from PyPI
-
-```bash
-uvx mcp-server-google-flights
-```
-
-### Option 2: Run from source
-
 ```bash
 git clone https://github.com/HaroldLeo/google-flights-mcp.git
 cd google-flights-mcp
@@ -76,22 +68,6 @@ pip install -e .
 ## Configuration
 
 ### Claude Desktop
-
-```json
-{
-  "mcpServers": {
-    "google-flights": {
-      "command": "uvx",
-      "args": ["mcp-server-google-flights"],
-      "env": {
-        "SERPAPI_API_KEY": "your_serpapi_key_here"
-      }
-    }
-  }
-}
-```
-
-### From source
 
 ```json
 {
@@ -154,7 +130,7 @@ The `Dockerfile` and transport switching are already configured — set `MCP_TRA
 
 **Scraping errors:** Retry later, or set `SERPAPI_API_KEY` for automatic fallback on `search_one_way_flights` and `search_round_trip_flights`. Date-range searches do not use SerpApi. `search_flights_by_airline` uses the SerpApi fallback for one-way searches with airline codes outside the built-in name table when `SERPAPI_API_KEY` is set.
 
-**Slow searches:** `search_round_trips_in_date_range` is limited to 30 date combinations to avoid rate limiting. Narrow your date range or use `min_stay_days`/`max_stay_days`.
+**Slow searches:** `search_round_trips_in_date_range` pages date pairs (default limit 20). A page of more than 30 pairs is rejected. Advance `offset` by `limit` to continue, or narrow the range with `min_stay_days`/`max_stay_days`.
 
 ---
 
