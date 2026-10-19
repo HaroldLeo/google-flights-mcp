@@ -431,7 +431,7 @@ def total_duration_minutes(flight_segments) -> int:
     return total
 
 
-def flight_to_dict(flight, compact=False, origin=None, destination=None, trip=None):
+def flight_to_dict(flight, compact=False, trip=None):
     try:
         price = getattr(flight, "price", None)
         airlines = getattr(flight, "airlines", []) or []
@@ -1886,8 +1886,6 @@ async def search_round_trip_flights(
                     flight_to_dict(
                         cheapest_flight,
                         compact=compact_mode,
-                        origin=origin,
-                        destination=destination,
                         trip="round-trip",
                     )
                 ]
@@ -1897,8 +1895,6 @@ async def search_round_trip_flights(
                     flight_to_dict(
                         f,
                         compact=compact_mode,
-                        origin=origin,
-                        destination=destination,
                         trip="round-trip",
                     )
                     for f in flights_to_process
@@ -2153,8 +2149,6 @@ async def search_round_trips_in_date_range(
                         "return_date": return_date.strftime('%Y-%m-%d'),
                         "cheapest_flight": flight_to_dict(
                             cheapest_flight_for_pair,
-                            origin=origin,
-                            destination=destination,
                             trip="round-trip",
                         ),
                         "booking_url": date_pair_url
@@ -2163,7 +2157,7 @@ async def search_round_trips_in_date_range(
                     flights_to_process = cap_results(result, max_results)
                     flights_list = [
                         flight_to_dict(
-                            f, origin=origin, destination=destination, trip="round-trip"
+                            f, trip="round-trip"
                         )
                         for f in flights_to_process
                     ]
@@ -2411,8 +2405,6 @@ async def search_flights_by_airline(
                     flight_to_dict(
                         cheapest_flight,
                         compact=compact_mode,
-                        origin=origin,
-                        destination=destination,
                         trip=trip_type,
                     )
                 ]
@@ -2422,8 +2414,6 @@ async def search_flights_by_airline(
                     flight_to_dict(
                         f,
                         compact=compact_mode,
-                        origin=origin,
-                        destination=destination,
                         trip=trip_type,
                     )
                     for f in flights_to_process
