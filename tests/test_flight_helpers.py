@@ -10,6 +10,7 @@ from mcp_server_google_flights.server import (
     cap_results,
     combine_outbound_and_return_flights,
     flight_to_dict,
+    format_datetime,
     generate_google_flights_url,
     convert_seat_type_to_serpapi,
     normalize_seat_type,
@@ -73,6 +74,34 @@ def test_parse_price_literals():
 def test_parse_iso_date_accepts_calendar_day():
     parsed = parse_iso_date("2026-11-02")
     assert (parsed.year, parsed.month, parsed.day) == (2026, 11, 2)
+
+
+def test_format_datetime_falls_back_to_date_when_time_cannot_format():
+    value = SimpleNamespace(date=(2026, 11, 2), time=("08", "15"))
+    assert format_datetime(value) == "2026-11-02"
+
+
+def test_format_datetime_returns_none_when_date_cannot_format():
+    value = SimpleNamespace(date=(None, None, None), time=None)
+    assert format_datetime(value) is None
+
+
+def test_format_datetime_date_fallback_does_not_swallow_keyboard_interrupt():
+    class DateThenInterrupt:
+        def __init__(self):
+            self.calls = 0
+
+        @property
+        def date(self):
+            self.calls += 1
+            if self.calls == 1:
+                return (2026, 11, 2)
+            raise KeyboardInterrupt
+
+        time = ("08", "15")
+
+    with pytest.raises(KeyboardInterrupt):
+        format_datetime(DateThenInterrupt())
 
 
 def test_parse_iso_date_rejects_garbage():
