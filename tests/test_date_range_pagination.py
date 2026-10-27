@@ -71,6 +71,21 @@ def test_normal_page_has_more_false_when_offset_plus_limit_reaches_total():
     assert mock.call_count == 2
 
 
+def test_limit_31_is_rejected_before_any_search():
+    # 8 calendar days, no stay filter => 36 pairs. limit=31 asks for 31 of them,
+    # which is over the per-call cap of 30, so the call is rejected with no search.
+    with patch.object(server, "get_flights", return_value=[_flight()]) as mock:
+        output = _run(server.search_round_trips_in_date_range(
+            "SFO", "JFK", "2026-12-01", "2026-12-08", limit=31,
+        ))
+    error = output["error"]
+    assert error["type"] == "RateLimitError"
+    assert error["requested_combinations"] == 31
+    assert error["maximum_allowed"] == 30
+    assert error["total_combinations_available"] == 36
+    assert mock.call_count == 0
+
+
 def test_default_limit_pages_a_range_larger_than_the_request_cap():
     # 14 calendar days, no stay filter => 105 pairs. Default limit=20 stays
     # under the per-call cap of 30, so the range is paged rather than rejected.
