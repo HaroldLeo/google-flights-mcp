@@ -364,13 +364,13 @@ def format_datetime(simple_datetime):
         else:
             # Return date only if time is missing
             return f"{year:04d}-{month:02d}-{day:02d}"
-    except (AttributeError, ValueError, TypeError) as e:
+    except (AttributeError, ValueError, TypeError):
         # Last resort fallback - try to extract just the date
         try:
             if hasattr(simple_datetime, 'date'):
                 year, month, day = simple_datetime.date
                 return f"{year:04d}-{month:02d}-{day:02d}"
-        except:
+        except (AttributeError, TypeError, ValueError):
             pass
         return None
 
@@ -1749,7 +1749,7 @@ async def search_one_way_flights(
                 "search_parameters": { "origin": origin, "destination": destination, "date": date, "adults": adults, "seat_type": seat_type }
              })
 
-    except InvalidDateFormat as e:
+    except InvalidDateFormat:
          log_error(TOOL, "ValueError", f"Invalid date format: '{date}'. Use YYYY-MM-DD")
          error_payload = {"error": {"message": f"Invalid date format: '{date}'. Please use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
@@ -1929,7 +1929,7 @@ async def search_round_trip_flights(
                  "search_parameters": { "origin": origin, "destination": destination, "departure_date": departure_date, "return_date": return_date, "adults": adults, "seat_type": seat_type, "max_stops": max_stops }
             })
 
-    except InvalidDateFormat as e:
+    except InvalidDateFormat:
          log_error(TOOL, "ValueError", "Invalid date format provided. Use YYYY-MM-DD")
          error_payload = {"error": {"message": f"Invalid date format provided. Use YYYY-MM-DD.", "type": "ValueError"}}
          return json.dumps(error_payload)
@@ -2050,7 +2050,7 @@ async def search_round_trips_in_date_range(
     try:
         start_date = parse_iso_date(start_date_str).date()
         end_date = parse_iso_date(end_date_str).date()
-    except InvalidDateFormat as e:
+    except InvalidDateFormat:
         # Return structured error
         error_payload = {"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}}
         return json.dumps(error_payload)
@@ -2433,7 +2433,7 @@ async def search_flights_by_airline(
                 "search_parameters": {"origin": origin, "destination": destination, "date": date, "airlines": airlines_list, "max_stops": max_stops}
             })
 
-    except InvalidDateFormat as e:
+    except InvalidDateFormat:
         log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
     except FlightsNotFound as e:
@@ -2462,7 +2462,6 @@ async def search_flights_by_airline(
         }
         return json.dumps(response_data)
     except Exception as e:
-        import traceback
         error_msg = str(e)
         log_error(TOOL, type(e).__name__, error_msg)
         log_debug(TOOL, "traceback", traceback.format_exc())
@@ -2558,11 +2557,10 @@ async def generate_google_flights_url(
 
         return json.dumps(output_data, indent=2)
 
-    except InvalidDateFormat as e:
+    except InvalidDateFormat:
         log_error(TOOL, "ValueError", "Invalid date format. Use YYYY-MM-DD")
         return json.dumps({"error": {"message": f"Invalid date format. Use YYYY-MM-DD.", "type": "ValueError"}})
     except Exception as e:
-        import traceback
         log_error(TOOL, type(e).__name__, str(e))
         log_debug(TOOL, "traceback", traceback.format_exc())
         return json.dumps({"error": {"message": str(e), "type": type(e).__name__}})
