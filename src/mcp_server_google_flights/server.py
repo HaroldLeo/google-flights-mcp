@@ -7,6 +7,7 @@ import sys
 import os
 import re
 import traceback
+from pathlib import Path
 from typing import Any, Optional, Dict, List
 
 try:
@@ -31,7 +32,24 @@ except ImportError as e:
 # upstream fast-flights parser expects the results page and otherwise raises an
 # opaque NoneType.text error. Support an owner-configured SOCS consent cookie,
 # and fail with an actionable message when Google still returns the interstitial.
-_GOOGLE_SOCS_COOKIE = os.getenv("GOOGLE_FLIGHTS_SOCS_COOKIE", "").strip()
+def _load_google_socs_cookie() -> str:
+    configured = os.getenv("GOOGLE_FLIGHTS_SOCS_COOKIE", "").strip()
+    if configured:
+        return configured
+
+    cookie_path = Path.home() / ".config" / "google-flights-mcp" / "socs_cookie"
+    try:
+        metadata = cookie_path.stat()
+    except FileNotFoundError:
+        return ""
+    if metadata.st_uid != os.getuid() or metadata.st_mode & 0o077:
+        raise RuntimeError(
+            "Google Flights SOCS cookie file must be owned by this user and have mode 0600."
+        )
+    return cookie_path.read_text(encoding="utf-8").strip()
+
+
+_GOOGLE_SOCS_COOKIE = _load_google_socs_cookie()
 _GOOGLE_FLIGHTS_URL = "https://www.google.com/travel/flights"
 _ORIGINAL_FETCH_FLIGHTS_HTML = _fast_flights_fetcher.fetch_flights_html
 

@@ -73,8 +73,10 @@ Google may redirect EU requests to its consent interstitial, which the
 `fast-flights` parser cannot read. If this happens, the server returns an
 explicit consent error instead of a parser traceback. After choosing your
 Google cookie preferences, you may provide the resulting `SOCS` cookie as
-`GOOGLE_FLIGHTS_SOCS_COOKIE`. Do not commit cookie values. Without this setting,
-the server does not imply consent and will report the interstitial clearly.
+`GOOGLE_FLIGHTS_SOCS_COOKIE` or in the owner-only local file
+`~/.config/google-flights-mcp/socs_cookie` (mode `0600`). Do not commit cookie
+values. Without either setting, the server does not imply consent and reports
+the interstitial clearly.
 
 ### Claude Desktop
 
