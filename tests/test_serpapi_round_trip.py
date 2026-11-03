@@ -38,3 +38,35 @@ def test_round_trip_uses_serpapi_when_google_results_omit_return_segments():
     assert kwargs["return_date"] == "2026-12-13"
     assert kwargs["max_stops"] == server.to_serpapi_stops(1)
     assert kwargs["fallback_reason"] == "round-trip return-leg selection"
+
+
+def test_return_lookup_includes_original_route_with_departure_token():
+    captured = []
+
+    class RecordingSearch:
+        def __init__(self, params):
+            captured.append(params)
+
+        def get_dict(self):
+            return {"best_flights": []}
+
+    with (
+        patch.object(server, "SERPAPI_ENABLED", True),
+        patch.object(server, "GoogleSearch", RecordingSearch, create=True),
+    ):
+        result = server.get_return_flights_from_serpapi(
+            "opaque-token", "NAP", "CDG", "2026-12-10", "2026-12-13"
+        )
+
+    assert result == {"best_flights": []}
+    assert captured == [
+        {
+            "engine": "google_flights",
+            "api_key": server.SERPAPI_API_KEY,
+            "departure_id": "NAP",
+            "arrival_id": "CDG",
+            "outbound_date": "2026-12-10",
+            "return_date": "2026-12-13",
+            "departure_token": "opaque-token",
+        }
+    ]

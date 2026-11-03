@@ -850,11 +850,21 @@ def normalize_serpapi_flight(flight_data: Dict, is_best: bool = False) -> Dict:
         }
 
 
-def get_return_flights_from_serpapi(departure_token: str) -> Optional[Dict]:
+def get_return_flights_from_serpapi(
+    departure_token: str,
+    origin: str,
+    destination: str,
+    departure_date: str,
+    return_date: str,
+) -> Optional[Dict]:
     """Fetch return flights for a specific outbound flight using departure_token.
 
     Args:
         departure_token: Token from outbound flight to fetch matching return flights
+        origin: Original round-trip origin airport code
+        destination: Original round-trip destination airport code
+        departure_date: Original round-trip departure date
+        return_date: Original round-trip return date
 
     Returns:
         SerpApi response with return flight options, or None if error
@@ -866,6 +876,10 @@ def get_return_flights_from_serpapi(departure_token: str) -> Optional[Dict]:
         params = {
             "engine": "google_flights",
             "api_key": SERPAPI_API_KEY,
+            "departure_id": origin,
+            "arrival_id": destination,
+            "outbound_date": departure_date,
+            "return_date": return_date,
             "departure_token": departure_token,
         }
 
@@ -1046,7 +1060,13 @@ def try_serpapi_fallback(
                             tool_name,
                             f"Fetching return flights for outbound option #{idx+1}",
                         )
-                        return_result = get_return_flights_from_serpapi(departure_token)
+                        return_result = get_return_flights_from_serpapi(
+                            departure_token,
+                            origin,
+                            destination,
+                            departure_date,
+                            return_date,
+                        )
 
                         if return_result:
                             return_flights = convert_serpapi_response(return_result)
@@ -1119,7 +1139,14 @@ def try_serpapi_fallback(
                 }
 
                 # Add note about round-trip processing
-                if return_date and len([f for f in processed_flights if f.get("flight_type") == "Round trip"]) > 0:
+                complete_flights = [
+                    flight for flight in processed_flights
+                    if flight.get("outbound_details")
+                    and flight.get("return_details")
+                    and flight["outbound_details"].get("segments")
+                    and flight["return_details"].get("segments")
+                ]
+                if return_date and complete_flights:
                     output_data["round_trip_note"] = (
                         "✓ Complete round-trip packages with both outbound and return flights. "
                         "Limited to top outbound options to minimize API costs."
@@ -2375,8 +2402,8 @@ async def search_flights_by_airline(
 
         target_airline_names, unrecognized_airlines = expand_airline_filter(airlines_list)
         unmapped_codes = [a for a in unrecognized_airlines if is_iata_airline_code(normalize_airline_key(a))]
-        # The shared SerpApi round-trip path drops the route when following departure tokens,
-        # so the SerpApi airline filter is limited to one-way searches.
+        # The pinned return-leg lookup does not reapply airline filters, so the
+        # SerpApi-only airline fallback is limited to one-way searches.
         use_serpapi_filter = bool(unmapped_codes) and SERPAPI_ENABLED and not is_round_trip
         if not target_airline_names and not use_serpapi_filter:
             return json.dumps({"error": {
