@@ -67,6 +67,15 @@ pip install -e .
 
 ## Configuration
 
+### Google Flights consent in the EU
+
+Google may redirect EU requests to its consent interstitial, which the
+`fast-flights` parser cannot read. If this happens, the server returns an
+explicit consent error instead of a parser traceback. After choosing your
+Google cookie preferences, you may provide the resulting `SOCS` cookie as
+`GOOGLE_FLIGHTS_SOCS_COOKIE`. Do not commit cookie values. Without this setting,
+the server does not imply consent and will report the interstitial clearly.
+
 ### Claude Desktop
 
 ```json
@@ -76,7 +85,8 @@ pip install -e .
       "command": "/absolute/path/to/.venv/bin/python",
       "args": ["/absolute/path/to/google-flights-mcp/src/mcp_server_google_flights/server.py"],
       "env": {
-        "SERPAPI_API_KEY": "your_serpapi_key_here"
+        "SERPAPI_API_KEY": "your_serpapi_key_here",
+        "GOOGLE_FLIGHTS_SOCS_COOKIE": "optional; only after choosing Google cookie preferences"
       }
     }
   }

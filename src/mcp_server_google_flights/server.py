@@ -17,6 +17,8 @@ try:
         create_query,
         FlightsNotFound,
     )
+    from fast_flights import fetcher as _fast_flights_fetcher
+    from primp import Client as _PrimpClient
 except ImportError as e:
     print(f"Error importing fast_flights: {e}", file=sys.stderr)
     print(
@@ -24,6 +26,44 @@ except ImportError as e:
         file=sys.stderr,
     )
     sys.exit(1)
+
+# Google currently redirects many EU requests to a consent interstitial. The
+# upstream fast-flights parser expects the results page and otherwise raises an
+# opaque NoneType.text error. Support an owner-configured SOCS consent cookie,
+# and fail with an actionable message when Google still returns the interstitial.
+_GOOGLE_SOCS_COOKIE = os.getenv("GOOGLE_FLIGHTS_SOCS_COOKIE", "").strip()
+_GOOGLE_FLIGHTS_URL = "https://www.google.com/travel/flights"
+_ORIGINAL_FETCH_FLIGHTS_HTML = _fast_flights_fetcher.fetch_flights_html
+
+
+def _fetch_flights_html_with_consent_handling(q, /, *, proxy=None, fetch_integration=None):
+    if fetch_integration is not None:
+        return _ORIGINAL_FETCH_FLIGHTS_HTML(
+            q, proxy=proxy, fetch_integration=fetch_integration
+        )
+
+    client = _PrimpClient(
+        impersonate="chrome_145",
+        impersonate_os="macos",
+        referer=True,
+        proxy=proxy,
+        cookie_store=True,
+        cookies={"SOCS": _GOOGLE_SOCS_COOKIE} if _GOOGLE_SOCS_COOKIE else None,
+    )
+    params = {"q": q} if isinstance(q, str) else q.params()
+    response = client.get(_GOOGLE_FLIGHTS_URL, params=params)
+    final_host = re.sub(r"^https?://", "", str(response.url)).split("/", 1)[0].lower()
+    if final_host == "consent.google.com" or final_host.endswith(".consent.google.com"):
+        raise RuntimeError(
+            "Google Flights returned its consent interstitial. Set "
+            "GOOGLE_FLIGHTS_SOCS_COOKIE after choosing Google cookie preferences."
+        )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Google Flights request failed with HTTP {response.status_code}.")
+    return response.text
+
+
+_fast_flights_fetcher.fetch_flights_html = _fetch_flights_html_with_consent_handling
 
 # Import SerpApi for fallback (optional)
 try:
