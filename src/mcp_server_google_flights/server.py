@@ -2333,6 +2333,13 @@ async def search_round_trips_in_date_range(
             "return_cheapest_only": return_cheapest_only # Include parameter in output
         },
         results_key: results_data, # Use dynamic key for results
+        "return_segments_included": False,
+        "round_trip_note": (
+            "Date-range results are for candidate discovery: fast-flights returns "
+            "outbound segments with a round-trip total price, but not the paired "
+            "return segments. Validate shortlisted date pairs with "
+            "search_round_trip_flights before describing them as complete."
+        ),
         "errors_encountered": error_messages if error_messages else None,
         "pagination": {
             "offset": offset,

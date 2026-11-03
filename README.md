@@ -76,6 +76,10 @@ options. One tool call can use up to four successful SerpApi searches: one
 outbound search and up to three return-leg searches. With
 `return_cheapest_only=true`, it uses at most two searches.
 
+Flexible date-range results are discovery candidates only and explicitly mark
+that return segments are absent. Validate shortlisted dates with the exact-date
+round-trip tool before describing or saving a complete itinerary.
+
 Set `SERPAPI_API_KEY` in the MCP process environment, or store the key in
 `~/.config/google-flights-mcp/serpapi_api_key` with owner-only permissions
 (`0600`). The server rejects a key file owned by another user or readable by
