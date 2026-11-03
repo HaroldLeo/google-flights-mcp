@@ -83,6 +83,23 @@ def _fetch_flights_html_with_consent_handling(q, /, *, proxy=None, fetch_integra
 
 _fast_flights_fetcher.fetch_flights_html = _fetch_flights_html_with_consent_handling
 
+
+def _load_serpapi_api_key() -> str:
+    configured = os.getenv("SERPAPI_API_KEY", "").strip()
+    if configured:
+        return configured
+
+    key_path = Path.home() / ".config" / "google-flights-mcp" / "serpapi_api_key"
+    try:
+        metadata = key_path.stat()
+    except FileNotFoundError:
+        return ""
+    if metadata.st_uid != os.getuid() or metadata.st_mode & 0o077:
+        raise RuntimeError(
+            "SerpApi key file must be owned by this user and have mode 0600."
+        )
+    return key_path.read_text(encoding="utf-8").strip()
+
 # Import SerpApi for fallback (optional)
 try:
     from serpapi import GoogleSearch
@@ -106,8 +123,13 @@ if _transport_security is not None:
 mcp = FastMCP("google-flights-comprehensive", **_mcp_kwargs)
 
 # --- SerpApi Configuration ---
-SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
-SERPAPI_ENABLED = SERPAPI_AVAILABLE and SERPAPI_API_KEY is not None
+SERPAPI_API_KEY = _load_serpapi_api_key()
+SERPAPI_ENABLED = SERPAPI_AVAILABLE and bool(SERPAPI_API_KEY)
+
+
+def _redact_serpapi_key(value: Any) -> str:
+    message = str(value)
+    return message.replace(SERPAPI_API_KEY, "[REDACTED]") if SERPAPI_API_KEY else message
 
 if SERPAPI_ENABLED:
     print(f"[SerpApi] Fallback enabled with API key", file=sys.stderr)
@@ -732,7 +754,7 @@ def get_flights_from_serpapi(
         return results
 
     except Exception as e:
-        log_error("SerpApi", type(e).__name__, str(e))
+        log_error("SerpApi", type(e).__name__, _redact_serpapi_key(e))
         return None
 
 
@@ -852,7 +874,11 @@ def get_return_flights_from_serpapi(departure_token: str) -> Optional[Dict]:
         return results
 
     except Exception as e:
-        log_error("get_return_flights_from_serpapi", type(e).__name__, str(e))
+        log_error(
+            "get_return_flights_from_serpapi",
+            type(e).__name__,
+            _redact_serpapi_key(e),
+        )
         return None
 
 
@@ -967,7 +993,8 @@ def try_serpapi_fallback(
     max_stops: Optional[int] = None,
     airlines: Optional[List[str]] = None,
     return_cheapest_only: bool = False,
-    max_results: int = 10
+    max_results: int = 10,
+    fallback_reason: str = "fast-flights error",
 ) -> Optional[str]:
     """Try to fetch flights using SerpApi as a fallback.
 
@@ -977,7 +1004,7 @@ def try_serpapi_fallback(
     if not SERPAPI_ENABLED:
         return None
 
-    log_info(tool_name, "Attempting SerpApi fallback...")
+    log_info(tool_name, f"Using SerpApi for complete results ({fallback_reason})...")
     try:
         serpapi_result = get_flights_from_serpapi(
             origin=origin,
@@ -1002,7 +1029,8 @@ def try_serpapi_fallback(
                 if return_date:
                     log_info(tool_name, "Round-trip detected - fetching return flights...")
                     complete_roundtrips = []
-                    max_outbound_to_process = min(3, len(outbound_flights))
+                    outbound_limit = 1 if return_cheapest_only else 3
+                    max_outbound_to_process = min(outbound_limit, len(outbound_flights))
                     outbound_to_process = outbound_flights[:max_outbound_to_process]
 
                     for idx, outbound in enumerate(outbound_to_process):
@@ -1023,7 +1051,8 @@ def try_serpapi_fallback(
                         if return_result:
                             return_flights = convert_serpapi_response(return_result)
                             if return_flights:
-                                for return_flight in return_flights[:2]:
+                                return_limit = 1 if return_cheapest_only else 2
+                                for return_flight in return_flights[:return_limit]:
                                     combined = combine_outbound_and_return_flights(
                                         outbound, return_flight
                                     )
@@ -1086,7 +1115,7 @@ def try_serpapi_fallback(
                         seat=seat_type,
                     ),
                     "data_source": "SerpApi (fallback)",
-                    "note": "Results from SerpApi due to fast-flights error",
+                    "note": f"Results from SerpApi due to {fallback_reason}",
                 }
 
                 # Add note about round-trip processing
@@ -1110,7 +1139,9 @@ def try_serpapi_fallback(
 
                 return json.dumps(output_data, indent=2)
     except Exception as fallback_error:
-        log_error(tool_name, "SerpApi fallback", str(fallback_error))
+        log_error(
+            tool_name, "SerpApi fallback", _redact_serpapi_key(fallback_error)
+        )
 
     return None
 
@@ -1927,6 +1958,7 @@ async def search_round_trip_flights(
             passengers=passengers_info,
             max_stops=max_stops,
         )
+
         result = get_flights(query)
 
         google_flights_url = _make_google_flights_url(
@@ -1938,6 +1970,30 @@ async def search_round_trip_flights(
 
         if result:
             log_info(TOOL, f"Found {len(result)} round-trip option(s)")
+            # fast-flights returns only outbound segments for round-trip
+            # searches, even though the displayed fare is a round-trip total.
+            # Use SerpApi's departure-token flow to obtain paired return legs.
+            # It costs one initial search plus at most three return searches.
+            if SERPAPI_ENABLED:
+                complete_round_trip = try_serpapi_fallback(
+                    tool_name=TOOL,
+                    origin=origin,
+                    destination=destination,
+                    departure_date=departure_date,
+                    return_date=return_date,
+                    adults=adults,
+                    children=children,
+                    infants_in_seat=infants_in_seat,
+                    infants_on_lap=infants_on_lap,
+                    seat_type=seat_type,
+                    max_stops=to_serpapi_stops(max_stops),
+                    return_cheapest_only=return_cheapest_only,
+                    max_results=max_results,
+                    fallback_reason="round-trip return-leg selection",
+                )
+                if complete_round_trip:
+                    return complete_round_trip
+
             if return_cheapest_only:
                 cheapest_flight = min(result, key=lambda f: parse_price(f.price))
                 processed_flights = [

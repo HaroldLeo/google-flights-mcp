@@ -67,6 +67,21 @@ pip install -e .
 
 ## Configuration
 
+### SerpApi round-trip results (optional)
+
+`fast-flights` returns outbound segments with a round-trip total fare, but does
+not include the matching return segments. When SerpApi is enabled, round-trip
+searches use its documented `departure_token` flow to retrieve paired return
+options. One tool call can use up to four successful SerpApi searches: one
+outbound search and up to three return-leg searches. With
+`return_cheapest_only=true`, it uses at most two searches.
+
+Set `SERPAPI_API_KEY` in the MCP process environment, or store the key in
+`~/.config/google-flights-mcp/serpapi_api_key` with owner-only permissions
+(`0600`). The server rejects a key file owned by another user or readable by
+group/others. The local key file is outside this repository; never commit or
+log the key. Review SerpApi's current plan and quota before enabling it.
+
 ### Google Flights consent in the EU
 
 Google may redirect EU requests to its consent interstitial, which the
@@ -87,7 +102,6 @@ the interstitial clearly.
       "command": "/absolute/path/to/.venv/bin/python",
       "args": ["/absolute/path/to/google-flights-mcp/src/mcp_server_google_flights/server.py"],
       "env": {
-        "SERPAPI_API_KEY": "your_serpapi_key_here",
         "GOOGLE_FLIGHTS_SOCS_COOKIE": "optional; only after choosing Google cookie preferences"
       }
     }
@@ -129,7 +143,7 @@ The `Dockerfile` and transport switching are already configured — set `MCP_TRA
 
 | Variable | Description |
 |----------|-------------|
-| `SERPAPI_API_KEY` | SerpAPI key for richer flight data (optional) |
+| `SERPAPI_API_KEY` | SerpApi key (optional; can instead use the owner-only local key file above) |
 | `MCP_TRANSPORT` | `stdio` (default) or `sse` for remote deployment |
 | `FASTMCP_HOST` | Host for SSE mode (default: `0.0.0.0`) |
 | `FASTMCP_PORT` | Port for SSE mode (default: `7860`) |
