@@ -73,8 +73,8 @@ pip install -e .
 {
   "mcpServers": {
     "google-flights": {
-      "command": "/absolute/path/to/.venv/bin/python",
-      "args": ["/absolute/path/to/google-flights-mcp/src/mcp_server_google_flights/server.py"],
+      "command": "/absolute/path/to/google-flights-mcp/.venv/bin/mcp-server-google-flights",
+      "args": [],
       "env": {
         "SERPAPI_API_KEY": "your_serpapi_key_here"
       }
@@ -82,6 +82,8 @@ pip install -e .
   }
 }
 ```
+
+`pip install -e .` installs the `mcp-server-google-flights` entry point into the venv. Running `src/mcp_server_google_flights/server.py` with the venv's `python` also still works.
 
 **Get a free SerpAPI key:** [serpapi.com/users/sign_up](https://serpapi.com/users/sign_up) (250 free searches/month)
 
