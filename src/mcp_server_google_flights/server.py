@@ -1606,8 +1606,8 @@ async def get_travel_dates(
     Helpful for planning future trips.
 
     Args:
-        days_from_now: Number of days from today for departure (default: 30).
-        trip_length: Length of trip in days (default: 7).
+        days_from_now: Number of days from today for departure (default: 30). Must be >= 0.
+        trip_length: Length of trip in days (default: 7). Must be >= 1.
 
     Returns:
         JSON with suggested departure and return dates.
@@ -1617,6 +1617,15 @@ async def get_travel_dates(
     """
     TOOL = "get_travel_dates"
     log_info(TOOL, f"Calculating dates: +{days_from_now} days, {trip_length} day trip")
+
+    if days_from_now < 0:
+        message = "days_from_now must be 0 or greater."
+        log_error(TOOL, "ValueError", message)
+        return json.dumps({"error": {"message": message, "type": "ValueError"}})
+    if trip_length < 1:
+        message = "trip_length must be 1 or greater."
+        log_error(TOOL, "ValueError", message)
+        return json.dumps({"error": {"message": message, "type": "ValueError"}})
 
     try:
         today = datetime.date.today()
