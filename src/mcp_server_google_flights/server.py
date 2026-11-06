@@ -1671,9 +1671,9 @@ async def search_one_way_flights(
         compact_mode: If True, scraper results omit segments and carbon emissions (saves ~40% tokens, default: False). SerpApi fallback responses are unchanged and still include those fields.
 
     Example Args:
-        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20"}
-        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "adults": 2, "children": 1}
-        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "return_cheapest_only": true}
+        {"origin": "SFO", "destination": "JFK", "date": "2027-07-20"}
+        {"origin": "SFO", "destination": "JFK", "date": "2027-07-20", "adults": 2, "children": 1}
+        {"origin": "SFO", "destination": "JFK", "date": "2027-07-20", "return_cheapest_only": true}
     """
     TOOL = "search_one_way_flights"
     log_info(TOOL, f"Searching {origin}→{destination} on {date} ({adults} adult(s), {seat_type})")
@@ -1837,9 +1837,9 @@ async def search_round_trip_flights(
         compact_mode: If True, scraper results omit segments and carbon emissions (saves ~40% tokens, default: False). SerpApi fallback responses are unchanged and still include those fields.
 
     Example Args:
-        {"origin": "DEN", "destination": "LAX", "departure_date": "2025-08-01", "return_date": "2025-08-08"}
-        {"origin": "DEN", "destination": "LAX", "departure_date": "2025-08-01", "return_date": "2025-08-08", "adults": 2, "children": 2}
-        {"origin": "DEN", "destination": "LAX", "departure_date": "2025-08-01", "return_date": "2025-08-08", "max_stops": 0}
+        {"origin": "DEN", "destination": "LAX", "departure_date": "2027-08-01", "return_date": "2027-08-08"}
+        {"origin": "DEN", "destination": "LAX", "departure_date": "2027-08-01", "return_date": "2027-08-08", "adults": 2, "children": 2}
+        {"origin": "DEN", "destination": "LAX", "departure_date": "2027-08-01", "return_date": "2027-08-08", "max_stops": 0}
     """
     TOOL = "search_round_trip_flights"
     log_info(TOOL, f"Round-trip {origin}↔{destination} ({departure_date} to {return_date})")
@@ -2032,8 +2032,8 @@ async def search_round_trips_in_date_range(
             Set to 0 or -1 to return every remaining pair from offset.
 
     Example Args:
-        {"origin": "JFK", "destination": "MIA", "start_date_str": "2025-09-10", "end_date_str": "2025-09-20", "min_stay_days": 5}
-        {"origin": "JFK", "destination": "MIA", "start_date_str": "2025-09-10", "end_date_str": "2025-09-20", "min_stay_days": 5, "return_cheapest_only": true}
+        {"origin": "JFK", "destination": "MIA", "start_date_str": "2027-09-10", "end_date_str": "2027-09-20", "min_stay_days": 5}
+        {"origin": "JFK", "destination": "MIA", "start_date_str": "2027-09-10", "end_date_str": "2027-09-20", "min_stay_days": 5, "return_cheapest_only": true}
     """
     TOOL = "search_round_trips_in_date_range"
     MAX_DATE_COMBINATIONS = 30
@@ -2248,8 +2248,8 @@ async def search_flights_by_airline(
 
     Example Args:
         {"origin": "SFO", "destination": "TYO", "date": "2026-02-20", "airlines": ["UA"]}
-        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": ["UA", "AA"]}
-        {"origin": "SFO", "destination": "JFK", "date": "2025-07-20", "airlines": ["STAR_ALLIANCE"], "max_stops": 0}
+        {"origin": "SFO", "destination": "JFK", "date": "2027-07-20", "airlines": ["UA", "AA"]}
+        {"origin": "SFO", "destination": "JFK", "date": "2027-07-20", "airlines": ["STAR_ALLIANCE"], "max_stops": 0}
     """
     TOOL = "search_flights_by_airline"
 
@@ -2507,8 +2507,8 @@ async def generate_google_flights_url(
         JSON with the Google Flights URL.
 
     Example Args:
-        {"origin": "SFO", "destination": "JFK", "departure_date": "2025-07-20"}
-        {"origin": "SFO", "destination": "JFK", "departure_date": "2025-07-20", "return_date": "2025-07-27"}
+        {"origin": "SFO", "destination": "JFK", "departure_date": "2027-07-20"}
+        {"origin": "SFO", "destination": "JFK", "departure_date": "2027-07-20", "return_date": "2027-07-27"}
     """
     TOOL = "generate_google_flights_url"
 
