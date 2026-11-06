@@ -588,6 +588,48 @@ def test_scraper_error_url_keeps_infants(exc, call, url_kwargs):
     _assert_url_party(output["google_flights_url"], **_INFANT_PARTY)
 
 
+@pytest.mark.parametrize("kwargs, return_date", [
+    ({}, None),
+    ({"is_round_trip": True, "return_date": "2026-12-08"}, "2026-12-08"),
+])
+def test_airline_search_keeps_children_and_infants(kwargs, return_date):
+    expected = server._make_google_flights_url(
+        "SFO", "JFK", "2026-12-01", return_date=return_date, seat="economy", **_INFANT_PARTY
+    )
+    with patch.object(server, "SERPAPI_ENABLED", False), \
+         patch.object(server, "get_flights", side_effect=_fake_get_flights([_flight("United")])) as mock:
+        output = _run(server.search_flights_by_airline(
+            "SFO", "JFK", "2026-12-01", ["UA"], **kwargs, **_INFANT_PARTY,
+        ))
+
+    _assert_url_party(output["booking_url"], **_INFANT_PARTY)
+    assert output["booking_url"] == expected
+    assert list(mock.call_args.args[0].passengers) == _tfs_passengers(expected)
+    for key, value in _INFANT_PARTY.items():
+        assert output["search_parameters"][key] == value
+
+    for exc in (server.FlightsNotFound("missing"), RuntimeError("scraper down")):
+        with patch.object(server, "SERPAPI_ENABLED", False), \
+             patch.object(server, "get_flights", side_effect=exc):
+            error = _run(server.search_flights_by_airline(
+                "SFO", "JFK", "2026-12-01", ["UA"], **kwargs, **_INFANT_PARTY,
+            ))
+        assert error["google_flights_url"] == expected
+
+
+def test_serpapi_airline_filter_keeps_children_and_infants():
+    serpapi_output = json.dumps({"flights": [], "data_source": "SerpApi (fallback)"})
+    with patch.object(server, "SERPAPI_ENABLED", True), \
+         patch.object(server, "try_serpapi_fallback", return_value=serpapi_output) as serpapi:
+        output = _run(server.search_flights_by_airline(
+            "SFO", "JFK", "2026-12-01", ["XX"], **_INFANT_PARTY,
+        ))
+
+    for key, value in _INFANT_PARTY.items():
+        assert serpapi.call_args.kwargs[key] == value
+    _assert_url_party(output["booking_url"], **_INFANT_PARTY)
+
+
 @pytest.mark.parametrize("seat_type", ["premium-economy", "premium_economy"])
 def test_round_trip_fallback_maps_premium_economy_travel_class(seat_type):
     captured = []

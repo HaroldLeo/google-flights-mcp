@@ -2216,6 +2216,9 @@ async def search_flights_by_airline(
     is_round_trip: bool = False,
     return_date: Optional[str] = None,
     adults: int = 1,
+    children: int = 0,
+    infants_in_seat: int = 0,
+    infants_on_lap: int = 0,
     seat_type: str = "economy",
     max_stops: int = 2,
     return_cheapest_only: bool = False,
@@ -2240,6 +2243,9 @@ async def search_flights_by_airline(
         is_round_trip: If True, search round-trip flights (default: False).
         return_date: Return date for round-trips (YYYY-MM-DD format).
         adults: Number of adult passengers (default: 1).
+        children: Number of children (2-11 years, default: 0).
+        infants_in_seat: Number of infants in seat (under 2 years, default: 0).
+        infants_on_lap: Number of infants on lap (under 2 years, default: 0).
         seat_type: Fare class - economy/premium_economy/business/first (default: "economy").
         max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
         return_cheapest_only: If True, returns only the cheapest flight (default: False).
@@ -2324,6 +2330,9 @@ async def search_flights_by_airline(
             "is_round_trip": is_round_trip,
             "return_date": return_date if is_round_trip else None,
             "adults": adults,
+            "children": children,
+            "infants_in_seat": infants_in_seat,
+            "infants_on_lap": infants_on_lap,
             "seat_type": seat_type,
             "max_stops": max_stops,
             "return_cheapest_only": return_cheapest_only
@@ -2331,7 +2340,8 @@ async def search_flights_by_airline(
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
-            adults=adults,
+            adults=adults, children=children,
+            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
             seat=seat_type,
         )
 
@@ -2342,6 +2352,9 @@ async def search_flights_by_airline(
             serpapi_output = try_serpapi_fallback(
                 TOOL, origin, destination, date,
                 adults=adults,
+                children=children,
+                infants_in_seat=infants_in_seat,
+                infants_on_lap=infants_on_lap,
                 seat_type=seat_type,
                 max_stops=to_serpapi_stops(max_stops),
                 airlines=query_airlines,
@@ -2370,7 +2383,12 @@ async def search_flights_by_airline(
         if unrecognized_airlines:
             log_info(TOOL, f"Ignoring airlines with no name mapping: {unrecognized_airlines}")
 
-        passengers_info = Passengers(adults=adults)
+        passengers_info = Passengers(
+            adults=adults,
+            children=children,
+            infants_in_seat=infants_in_seat,
+            infants_on_lap=infants_on_lap
+        )
 
         log_info(TOOL, "Fetching flights from Google Flights (v3, native airline filter)...")
         query = create_query(
@@ -2443,7 +2461,8 @@ async def search_flights_by_airline(
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
-            adults=adults,
+            adults=adults, children=children,
+            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
             seat=seat_type,
         )
         response_data = {
@@ -2469,7 +2488,8 @@ async def search_flights_by_airline(
         google_flights_url = _make_google_flights_url(
             origin, destination, date,
             return_date=return_date if is_round_trip else None,
-            adults=adults,
+            adults=adults, children=children,
+            infants_in_seat=infants_in_seat, infants_on_lap=infants_on_lap,
             seat=seat_type,
         )
         response_data = {
