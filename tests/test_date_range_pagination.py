@@ -37,6 +37,8 @@ def _search(**kwargs):
 def test_nonpositive_limit_returns_all_remaining_and_has_more_false(limit):
     output, mock = _search(limit=limit)
     assert "error" not in output
+    assert output["return_segments_included"] is False
+    assert "Validate shortlisted date pairs" in output["round_trip_note"]
     page = output["pagination"]
     assert page["total_date_pairs"] == 6
     assert page["returned"] == 6
