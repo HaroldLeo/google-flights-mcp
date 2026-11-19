@@ -129,3 +129,24 @@ def test_offset_past_end_includes_pagination_with_has_more_false():
     assert output["all_round_trip_options"] == []
     assert "message" not in output
     assert mock.call_count == 0
+
+
+@pytest.mark.parametrize("kwargs, message", [
+    ({"offset": -1, "limit": 20}, "offset must be 0 or greater."),
+    ({"offset": -1, "limit": 0}, "offset must be 0 or greater."),
+    ({"min_stay_days": -1}, "min_stay_days must be 0 or greater."),
+    ({"max_stay_days": -1}, "max_stay_days must be 0 or greater."),
+    ({"min_stay_days": 2, "max_stay_days": 1}, "min_stay_days cannot be greater than max_stay_days."),
+])
+def test_invalid_offset_or_stay_bounds_rejected_before_any_search(kwargs, message):
+    output, mock = _search(**kwargs)
+    assert output == {"error": {"message": message, "type": "ValueError"}}
+    assert mock.call_count == 0
+
+
+def test_equal_min_and_max_stay_days_is_accepted():
+    # Three calendar days, stay of exactly 1 day => 2 date pairs.
+    output, mock = _search(min_stay_days=1, max_stay_days=1)
+    assert "error" not in output
+    assert output["pagination"]["total_date_pairs"] == 2
+    assert mock.call_count == 2

@@ -2029,14 +2029,15 @@ async def search_round_trips_in_date_range(
         destination: Destination airport code (e.g., "LAX").
         start_date_str: Start date of the search range (YYYY-MM-DD format).
         end_date_str: End date of the search range (YYYY-MM-DD format).
-        min_stay_days: Minimum number of days for the stay (optional).
-        max_stay_days: Maximum number of days for the stay (optional).
+        min_stay_days: Minimum number of days for the stay (optional). Must be >= 0
+            and, if max_stay_days is set, <= max_stay_days.
+        max_stay_days: Maximum number of days for the stay (optional). Must be >= 0.
         adults: Number of adult passengers (default: 1).
         seat_type: Fare class (e.g., "economy", "business", default: "economy").
         max_stops: Maximum number of stops (0=direct, 1=one stop, 2=two stops, default: 2).
         return_cheapest_only: If True, returns only the cheapest flight for each date pair (default: False).
         max_results: Maximum number of results to return (default: 10). Set to 0 or -1 for unlimited.
-        offset: Number of date pairs to skip (for pagination, default: 0).
+        offset: Number of date pairs to skip (for pagination, default: 0). Must be >= 0.
         limit: Maximum number of date pairs to fetch this call (default: 20).
             Set to 0 or -1 to return every remaining pair from offset.
 
@@ -2068,6 +2069,23 @@ async def search_round_trips_in_date_range(
         # Return structured error
         error_payload = {"error": {"message": "Start date cannot be after end date.", "type": "ValueError"}}
         return json.dumps(error_payload)
+
+    if offset < 0:
+        message = "offset must be 0 or greater."
+        log_error(TOOL, "ValueError", message)
+        return json.dumps({"error": {"message": message, "type": "ValueError"}})
+    if min_stay_days is not None and min_stay_days < 0:
+        message = "min_stay_days must be 0 or greater."
+        log_error(TOOL, "ValueError", message)
+        return json.dumps({"error": {"message": message, "type": "ValueError"}})
+    if max_stay_days is not None and max_stay_days < 0:
+        message = "max_stay_days must be 0 or greater."
+        log_error(TOOL, "ValueError", message)
+        return json.dumps({"error": {"message": message, "type": "ValueError"}})
+    if min_stay_days is not None and max_stay_days is not None and min_stay_days > max_stay_days:
+        message = "min_stay_days cannot be greater than max_stay_days."
+        log_error(TOOL, "ValueError", message)
+        return json.dumps({"error": {"message": message, "type": "ValueError"}})
 
     date_list = []
     current_date = start_date
