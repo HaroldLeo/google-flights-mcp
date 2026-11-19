@@ -556,7 +556,7 @@ def parse_price(price):
         return int(price)
     if isinstance(price, str):
         try:
-            return int(price.replace('$', '').replace(',', ''))
+            return parse_price(float(price.replace('$', '').replace(',', '')))
         except ValueError:
             return float('inf')
     return float('inf')
