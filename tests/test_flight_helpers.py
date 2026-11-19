@@ -63,12 +63,36 @@ def test_convert_seat_type_to_serpapi_accepts_hyphenated_premium_economy():
     assert convert_seat_type_to_serpapi("not-a-cabin") == 1
 
 
-def test_parse_price_literals():
-    assert parse_price(None) == float("inf")
-    assert parse_price("$1,200") == 1200
-    assert parse_price(99) == 99
-    assert parse_price(float("nan")) == float("inf")
-    assert parse_price(float("inf")) == float("inf")
+@pytest.mark.parametrize(
+    ("price", "expected"),
+    [
+        (None, float("inf")),
+        (99, 99),
+        (450.75, 450),
+        (float("nan"), float("inf")),
+        (float("inf"), float("inf")),
+        (float("-inf"), float("inf")),
+        ("$123", 123),
+        ("$1,200", 1200),
+        ("$1,234", 1234),
+        ("$1,234.50", 1234),
+        (" $99 ", 99),
+        ("9007199254740993", 9007199254740993),
+        ("0.99999999999999999", 0),
+        ("garbage", float("inf")),
+        ("", float("inf")),
+        ("nan", float("inf")),
+        ([450], float("inf")),
+    ],
+)
+def test_parse_price(price, expected):
+    assert parse_price(price) == expected
+
+
+def test_parse_price_picks_cents_fare_as_cheapest():
+    flights = [SimpleNamespace(price=500), SimpleNamespace(price="$450.99")]
+
+    assert min(flights, key=lambda f: parse_price(f.price)).price == "$450.99"
 
 
 def test_parse_iso_date_accepts_calendar_day():

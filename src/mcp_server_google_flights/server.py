@@ -7,6 +7,7 @@ import sys
 import os
 import re
 import traceback
+from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, Dict, List
 
 try:
@@ -556,9 +557,10 @@ def parse_price(price):
         return int(price)
     if isinstance(price, str):
         try:
-            return int(price.replace('$', '').replace(',', ''))
-        except ValueError:
+            value = Decimal(price.replace('$', '').replace(',', ''))
+        except InvalidOperation:
             return float('inf')
+        return int(value) if value.is_finite() else float('inf')
     return float('inf')
 
 
