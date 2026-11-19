@@ -77,6 +77,8 @@ def test_convert_seat_type_to_serpapi_accepts_hyphenated_premium_economy():
         ("$1,234", 1234),
         ("$1,234.50", 1234),
         (" $99 ", 99),
+        ("9007199254740993", 9007199254740993),
+        ("0.99999999999999999", 0),
         ("garbage", float("inf")),
         ("", float("inf")),
         ("nan", float("inf")),
